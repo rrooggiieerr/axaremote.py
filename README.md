@@ -35,4 +35,4 @@ Stop the window: `python3 -m axaremote <serial port> stop`\
 Close the window: `python3 -m axaremote <serial port> close`
 
 If you add the argument `--wait` to the open or close command the process will
-wait till the screen is down/up and show the progress.
+wait till the window is open/close and show the progress.
