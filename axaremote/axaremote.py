@@ -28,6 +28,7 @@ class AXARemote:
     RAW_STATUS_COMMAND_NOT_IMPLEMENTED = 502
 
     # To give better feedback some extra statuses are created
+    STATUS_DISCONNECTED = -1
     STATUS_STOPPED = 0
     STATUS_LOCKED = 1
     STATUS_UNLOCKING = 2
@@ -59,7 +60,7 @@ class AXARemote:
     _TIME_LOCK = _TIME_UNLOCK
 
     _raw_status = RAW_STATUS_STRONG_LOCKED
-    _status = STATUS_LOCKED
+    _status = STATUS_DISCONNECTED
     _position = 0.0  # 0.0 is closed, 100.0 is fully open
     _timestamp = None
 
@@ -248,7 +249,12 @@ class AXARemote:
         Calculates the position of the window opener based on the direction
         the window opener is moving.
         """
-        if self._status in [self.STATUS_LOCKED, self.STATUS_STOPPED, self.STATUS_OPEN]:
+        if self._status in [
+            self.STATUS_DISCONNECTED,
+            self.STATUS_LOCKED,
+            self.STATUS_STOPPED,
+            self.STATUS_OPEN,
+        ]:
             # Nothing to calculate here.
             return
 
@@ -268,16 +274,16 @@ class AXARemote:
 
         if self._status == self.STATUS_CLOSING:
             if time_passed < self._TIME_CLOSE:
-                self._position = (time_passed / self._TIME_CLOSE) * 100.0
+                self._position = 100 - ((time_passed / self._TIME_CLOSE) * 100.0)
             else:
                 self._status = self.STATUS_LOCKING
         if self._status == self.STATUS_LOCKING:
-            self._position = (
-                (time_passed - self._TIME_CLOSE) / self._TIME_LOCK
-            ) * 100.0
+            self._position = 100 - (
+                ((time_passed - self._TIME_CLOSE) / self._TIME_LOCK) * 100.0
+            )
             if time_passed > (self._TIME_CLOSE + self._TIME_LOCK):
                 self._status = self.STATUS_LOCKED
-                self._position = 100.0
+                self._position = 0.0
 
     def open(self) -> bool:
         """
