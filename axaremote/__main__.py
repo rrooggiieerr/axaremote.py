@@ -44,6 +44,7 @@ if __name__ == "__main__":
             status = axa.raw_status()
             _LOGGER.info(status[1])
         elif args.action == "open":
+            axa.set_position(0.0)
             if axa.open():
                 _LOGGER.info("AXA Remote is opening")
                 if args.wait:
@@ -62,6 +63,7 @@ if __name__ == "__main__":
                             break
                         time.sleep(0.1)
         elif args.action == "close":
+            axa.set_position(100.0)
             if axa.close():
                 _LOGGER.info("AXA Remote is closing")
                 if args.wait:
