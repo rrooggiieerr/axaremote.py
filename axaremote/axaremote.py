@@ -90,27 +90,37 @@ class AXARemote:
         else:
             self._status = self.STATUS_STOPPED
 
+    def _connect(self) -> bool:
+        if self._connection is None:
+            connection = serial.Serial(
+                port=self._serial_port,
+                baudrate=19200,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_TWO,
+                timeout=1,
+            )
+
+            # Open the connection
+            if not connection.is_open:
+                connection.open()
+
+            self._connection = connection
+        elif not self._connection.is_open:
+            # Try to repair the connection
+            self._connection.open()
+
+        if not self._connection.is_open:
+            return False
+
+        return True
+
     def connect(self) -> bool:
         """
         Connect to the window opener.
         """
-        connection = serial.Serial(
-            port=self._serial_port,
-            baudrate=19200,
-            bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_TWO,
-            timeout=1,
-        )
-
-        # Open the connection
-        if not connection.is_open:
-            connection.open()
-
-        if not connection.is_open:
+        if not self._connect():
             return False
-
-        self._connection = connection
 
         response = self._send_command("DEVICE")
         if response is None:
@@ -150,11 +160,9 @@ class AXARemote:
         Send a command to the AXA Remote
         """
 
-        if self._connection is None or not self._connection.is_open:
-            # Try to repair the connection
-            if self.connect() is None:
-                logger.error("Connection not available")
-                return None
+        if self._connect() is False:
+            logger.error("Connection not available")
+            return None
 
         while self._busy is True:
             logger.info("to busy for %s", command)
@@ -173,32 +181,26 @@ class AXARemote:
             self._connection.readline()
             self._connection.write(f"{command}\r\n".encode("ascii"))
             self._connection.flush()
-            logger.debug("Command successfully send")
 
-            n = 0
-            echo_received = False
             while True:
 
                 response = self._connection.readlines()
                 response = [s.decode() for s in response]
                 response = [s.strip() for s in response]
-                # logger.debug("Response: %s", response)
 
                 if len(response) == 0:
                     # empty line
-                    n += 1
-                    if n >= 2:
-                        logger.error("2 empty responses")
-                        break
-                    time.sleep(1)
+                    logger.error("Empty response, is your cable right?")
+                    response = None
                     break
 
                 if response[0] == command:
                     # command echo
-                    logger.debug("Command Echo")
-                    echo_received = True
+                    logger.debug("Command successfully send")
                     response.pop(0)
                 else:
+                    logger.error("No command echo received")
+                    logger.error("Response: %s", response)
                     response = None
                     break
 
@@ -206,15 +208,22 @@ class AXARemote:
                     response = response[0]
                 else:
                     response = linesep.join(response)
+
+                if response == "":
+                    response = None
+
                 logger.debug("Response: %s", response)
                 break
         except serial.SerialException as e:
-            logger.exception("Problem communicating with %s", self._serial_port)
+            logger.exception(
+                "Problem communicating with %s, reason: %s", self._serial_port, e
+            )
             response = None
         except UnicodeDecodeError as e:
             logger.warning(
-                "Error during response decode, invalid response: %s",
+                "Error during response decode, invalid response: %s, reason: %s",
                 response.decode(errors="replace"),
+                e,
             )
             response = None
         except Exception as ex:  # pylint: disable=broad-except
@@ -222,12 +231,6 @@ class AXARemote:
             response = None
 
         self._busy = False
-
-        if not echo_received:
-            logger.error("No command echo received, is your cable right?")
-
-        if response is None or response == "" or len(response) == 0:
-            response = None
 
         return response
 
