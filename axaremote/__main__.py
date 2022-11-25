@@ -33,56 +33,58 @@ if __name__ == "__main__":
         logging.basicConfig(format="%(message)s", level=logging.INFO)
 
     axa = AXARemote(args.port)
-    connected = False
     try:
-        connected = axa.connect()
+        if args.action == "status":
+            if not axa.connect():
+                _LOGGER.error("Failed to connect to AXA Remote")
+                sys.exit(1)
+
+            _LOGGER.info(axa.device)
+            _LOGGER.info(axa.version)
+            status = axa.raw_status()
+            _LOGGER.info(status[1])
+        elif args.action == "open":
+            if axa.open():
+                _LOGGER.info("AXA Remote is opening")
+                if args.wait:
+                    while True:
+                        status = axa.status()
+                        position = axa.position()
+                        if not args.debugLogging:
+                            print(
+                                f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
+                            )
+                        else:
+                            _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
+                        if status == axa.STATUS_OPEN:
+                            if not args.debugLogging:
+                                print()
+                            break
+                        time.sleep(0.1)
+        elif args.action == "close":
+            if axa.close():
+                _LOGGER.info("AXA Remote is closing")
+                if args.wait:
+                    while True:
+                        status = axa.status()
+                        position = axa.position()
+                        if not args.debugLogging:
+                            print(
+                                f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
+                            )
+                        else:
+                            _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
+                        if status == axa.STATUS_LOCKED:
+                            if not args.debugLogging:
+                                print()
+                            break
+                        time.sleep(0.1)
+        elif args.action == "stop":
+            if axa.stop():
+                _LOGGER.info("AXA Remote stopped")
     except SerialException as e:
-        _LOGGER.error(e)
-
-    if not connected:
-        _LOGGER.error("Failed to connect to AXA Remote")
+        _LOGGER.error("Failed to connect to AXA Remote, reason: %s", e)
         sys.exit(1)
-
-    if args.action == "status":
-        _LOGGER.info(axa.device)
-        _LOGGER.info(axa.version)
-        status = axa.raw_status()
-        _LOGGER.info(status[1])
-    elif args.action == "open":
-        if axa.open():
-            _LOGGER.info("AXA Remote is opening")
-            if args.wait:
-                while True:
-                    status = axa.status()
-                    position = axa.position()
-                    if not args.debugLogging:
-                        print(f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r")
-                    else:
-                        _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
-                    if status == axa.STATUS_OPEN:
-                        if not args.debugLogging:
-                            print()
-                        break
-                    time.sleep(0.1)
-    elif args.action == "close":
-        if axa.close():
-            _LOGGER.info("AXA Remote is closing")
-            if args.wait:
-                while True:
-                    status = axa.status()
-                    position = axa.position()
-                    if not args.debugLogging:
-                        print(f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r")
-                    else:
-                        _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
-                    if status == axa.STATUS_LOCKED:
-                        if not args.debugLogging:
-                            print()
-                        break
-                    time.sleep(0.1)
-    elif args.action == "stop":
-        if axa.stop():
-            _LOGGER.info("AXA Remote stopped")
 
     axa.disconnect()
     sys.exit(0)
