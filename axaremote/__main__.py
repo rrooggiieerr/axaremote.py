@@ -10,7 +10,7 @@ import time
 
 from serial.serialutil import SerialException
 
-from axaremote.axaremote import AXARemote
+from axaremote import AXARemote
 
 _LOGGER = logging.getLogger(__name__)
 
