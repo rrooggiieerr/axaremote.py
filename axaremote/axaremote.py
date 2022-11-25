@@ -342,6 +342,35 @@ class AXARemote:
 
         return response
 
+    def sync_status(self):
+        """
+        Synchronises the raw state with the presumed state.
+        """
+        if self._status == self.STATUS_DISCONNECTED and not self.connect():
+            # Device is still offline
+            return
+
+        raw_state = self.raw_status()
+        if raw_state[0] is None:
+            # Device is offline
+            self._status = self.STATUS_DISCONNECTED
+            return
+
+        if (
+            raw_state[0] == self.RAW_STATUS_STRONG_LOCKED
+            and self._status != self.STATUS_LOCKED
+        ):
+            logger.info("Raw state and presumed state not in sync, syncronising")
+            self._status = self.STATUS_LOCKED
+            self._position = 0.0
+        elif (
+            raw_state[0] == self.RAW_STATUS_UNLOCKED
+            and self._status == self.STATUS_LOCKED
+        ):
+            logger.info("Raw state and presumed state not in sync, syncronising")
+            self._status = self.STATUS_OPEN
+            self._position = 100.0
+
     def status(self) -> int:
         """
         Returns the current status of the window opener.
