@@ -23,6 +23,7 @@ class AXARemote:
     RAW_STATUS_OK = 200
     RAW_STATUS_UNLOCKED = 210
     RAW_STATUS_STRONG_LOCKED = 211
+    RAW_STATUS_WEAK_LOCKED = 212  # I have seen this state only once
     RAW_STATUS_DEVICE = 260
     RAW_STATUS_VERSION = 261
     RAW_STATUS_COMMAND_NOT_IMPLEMENTED = 502
@@ -138,6 +139,10 @@ class AXARemote:
 
         raw_status = self.raw_status()
         if raw_status[0] == self.RAW_STATUS_STRONG_LOCKED:
+            self._status = self.STATUS_LOCKED
+            self._position = 0.0
+        elif raw_status[0] == self.RAW_STATUS_WEAK_LOCKED:
+            # Currently handling this state as if it's Strong Locked
             self._status = self.STATUS_LOCKED
             self._position = 0.0
         else:
