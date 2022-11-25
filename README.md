@@ -13,11 +13,11 @@ use a LIN-bus controller to act as a level converter.
 ## Protocol
 This are the protocol details:\
 19200 baud 8N2\
-Device command : \r\nDEVICE\r\n
-Version command: \r\nVERSION\r\n
-Status command : \r\nSTATUS\r\n
-Open command   : \r\nOPEN\r\n
-Stop command   : \r\nSTOP\r\n
+Device command : \r\nDEVICE\r\n\
+Version command: \r\nVERSION\r\n\
+Status command : \r\nSTATUS\r\n\
+Open command   : \r\nOPEN\r\n\
+Stop command   : \r\nSTOP\r\n\
 Close command  : \r\nCLOSE\r\n
 
 ## Installation
