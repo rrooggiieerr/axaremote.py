@@ -87,6 +87,10 @@ if __name__ == "__main__":
     except SerialException as e:
         _LOGGER.error("Failed to connect to AXA Remote, reason: %s", e)
         sys.exit(1)
+    except KeyboardInterrupt:
+        # Handle keyboard interrupt
+        pass
+    finally:
+        axa.disconnect()
 
-    axa.disconnect()
     sys.exit(0)
