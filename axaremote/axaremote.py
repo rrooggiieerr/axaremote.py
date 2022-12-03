@@ -232,11 +232,11 @@ class AXARemote:
                 e,
             )
             response = None
-        except Exception as ex:  # pylint: disable=broad-except
+        except Exception as ex:
             logger.exception("Unexpected exception: %s", ex)
             response = None
-
-        self._busy = False
+        finally:
+            self._busy = False
 
         return response
 
