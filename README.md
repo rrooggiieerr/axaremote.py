@@ -2,6 +2,8 @@
 Python library to control AXA Remote window openers over the serial
 interface.
 
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >](https://www.buymeacoffee.com/rrooggiieerr)  
+
 ## Hardware
 If you power the AXA Remote using batteries you can connect the Serial 3.3 or
 5 Volts to position 1 or 6 of the RJ25 connector, ground to position 2 or 5 of
