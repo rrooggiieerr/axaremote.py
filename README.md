@@ -1,5 +1,5 @@
-# Python library to controll AXA Remote window openers.
-Python library to controll AXA Remote window openers over the serial
+# Python library to control AXA Remote window openers.
+Python library to control AXA Remote window openers over the serial
 interface.
 
 ## Hardware
@@ -27,7 +27,7 @@ PIP:\
 
 ## axaremote CLI
 You can use the Python AXA Remote library directly from the command line to
-open, stop or close your window using the follwoing syntax:
+open, stop or close your window using the following syntax:
 
 Status of the window: `python3 -m axaremote <serial port> status`\
 Open the window: `python3 -m axaremote <serial port> open`\
