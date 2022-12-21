@@ -49,10 +49,10 @@ class AXARemote:
     }
 
     _connection = None
-    _busy = False
+    _busy: bool = False
 
-    device = None
-    version = None
+    device: str = None
+    version: str = None
 
     # Time in seconds to close, lock, unlock and open the AXA Remote
     _TIME_UNLOCK = 10
@@ -60,14 +60,14 @@ class AXARemote:
     _TIME_CLOSE = _TIME_OPEN
     _TIME_LOCK = _TIME_UNLOCK
 
-    _raw_status = RAW_STATUS_STRONG_LOCKED
-    _status = STATUS_DISCONNECTED
-    _position = 0.0  # 0.0 is closed, 100.0 is fully open
-    _timestamp = None
+    _raw_status: int = RAW_STATUS_STRONG_LOCKED
+    _status: int = STATUS_DISCONNECTED
+    _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
+    _timestamp: float = None
 
-    def __init__(self, serial_port: str):
+    def __init__(self, serial_port: str) -> None:
         """
-        Initialises the AXARemote object.
+        Initializes the AXARemote object.
         """
         assert serial_port is not None
 
@@ -171,7 +171,7 @@ class AXARemote:
             return None
 
         while self._busy is True:
-            logger.info("to busy for %s", command)
+            logger.info("Too busy for %s", command)
             time.sleep(0.1)
         self._busy = True
 
@@ -188,59 +188,51 @@ class AXARemote:
             self._connection.write(f"{command}\r\n".encode("ascii"))
             self._connection.flush()
 
-            while True:
+            response = self._connection.readlines()
+            response = [s.decode() for s in response]
+            response = [s.strip() for s in response]
 
-                response = self._connection.readlines()
-                response = [s.decode() for s in response]
-                response = [s.strip() for s in response]
+            if len(response) == 0:
+                # Empty response
+                logger.error("Empty response, is your cable right?")
+                return None
 
-                if len(response) == 0:
-                    # empty line
-                    logger.error("Empty response, is your cable right?")
-                    response = None
-                    break
+            if response[0] == command:
+                # Command echo
+                logger.debug("Command successfully sent")
+                response.pop(0)
+            else:
+                logger.error("No command echo received")
+                logger.error("Response: %s", response)
+                return None
 
-                if response[0] == command:
-                    # command echo
-                    logger.debug("Command successfully send")
-                    response.pop(0)
-                else:
-                    logger.error("No command echo received")
-                    logger.error("Response: %s", response)
-                    response = None
-                    break
+            if len(response) == 1:
+                response = response[0]
+            else:
+                response = linesep.join(response)
 
-                if len(response) == 1:
-                    response = response[0]
-                else:
-                    response = linesep.join(response)
+            if response == "":
+                response = None
 
-                if response == "":
-                    response = None
-
-                logger.debug("Response: %s", response)
-                break
-        except serial.SerialException as e:
+            logger.debug("Response: %s", response)
+        except serial.SerialException as ex:
             logger.exception(
-                "Problem communicating with %s, reason: %s", self._serial_port, e
+                "Problem communicating with %s, reason: %s", self._serial_port, ex
             )
             response = None
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError as ex:
             logger.warning(
                 "Error during response decode, invalid response: %s, reason: %s",
                 response.decode(errors="replace"),
-                e,
+                ex,
             )
-            response = None
-        except Exception as ex:
-            logger.exception("Unexpected exception: %s", ex)
             response = None
         finally:
             self._busy = False
 
         return response
 
-    def _split_response(self, response):
+    def _split_response(self, response: str):
         if response is not None:
             result = response.split(maxsplit=1)
             if len(result) == 2:
@@ -338,7 +330,7 @@ class AXARemote:
 
         return False
 
-    def raw_status(self):
+    def raw_status(self) -> int:
         """
         Returns the status as given by the AXA Remote
         """
@@ -347,7 +339,7 @@ class AXARemote:
 
         return response
 
-    def sync_status(self):
+    def sync_status(self) -> None:
         """
         Synchronises the raw state with the presumed state.
         """

@@ -49,8 +49,8 @@ if __name__ == "__main__":
                 _LOGGER.info("AXA Remote is opening")
                 if args.wait:
                     while True:
-                        status = axa.status()
-                        position = axa.position()
+                        status: int = axa.status()
+                        position: float = axa.position()
                         if not args.debugLogging:
                             print(
                                 f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
@@ -68,8 +68,8 @@ if __name__ == "__main__":
                 _LOGGER.info("AXA Remote is closing")
                 if args.wait:
                     while True:
-                        status = axa.status()
-                        position = axa.position()
+                        status: int = axa.status()
+                        position: float = axa.position()
                         if not args.debugLogging:
                             print(
                                 f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
