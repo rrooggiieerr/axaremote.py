@@ -37,5 +37,5 @@ Close the window: `python3 -m axaremote <serial port> close`
 If you add the argument `--wait` to the open or close command the process will
 wait till the window is open/close and show the progress.
 
-Do you enjoy using this Python library? Then consider supporting my work:
+Do you enjoy using this Python library? Then consider supporting my work:\
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >](https://www.buymeacoffee.com/rrooggiieerr)  
