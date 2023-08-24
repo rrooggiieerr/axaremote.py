@@ -7,14 +7,17 @@ Created on 12 Nov 2022
 """
 import logging
 import time
+from abc import ABC, abstractmethod
 from os import linesep
 
 import serial
 
+from axaremote.axaconnection import AXASerialConnection, AXATelnetConnection
+
 logger = logging.getLogger(__name__)
 
 
-class AXARemote:
+class AXARemote(ABC):
     """
     AXA Remote class for controlling AXA Remote window openers.
     """
@@ -55,23 +58,15 @@ class AXARemote:
     version: str = None
 
     # Time in seconds to close, lock, unlock and open the AXA Remote
-    _TIME_UNLOCK = 10
-    _TIME_OPEN = 20
+    _TIME_UNLOCK = 5
+    _TIME_OPEN = 42
     _TIME_CLOSE = _TIME_OPEN
-    _TIME_LOCK = _TIME_UNLOCK
+    _TIME_LOCK = 16
 
     _raw_status: int = RAW_STATUS_STRONG_LOCKED
     _status: int = STATUS_DISCONNECTED
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
     _timestamp: float = None
-
-    def __init__(self, serial_port: str) -> None:
-        """
-        Initializes the AXARemote object.
-        """
-        assert serial_port is not None
-
-        self._serial_port = serial_port
 
     def set_position(self, position: float) -> None:
         """
@@ -92,30 +87,9 @@ class AXARemote:
         else:
             self._status = self.STATUS_STOPPED
 
+    @abstractmethod
     def _connect(self) -> bool:
-        if self._connection is None:
-            connection = serial.Serial(
-                port=self._serial_port,
-                baudrate=19200,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_TWO,
-                timeout=1,
-            )
-
-            # Open the connection
-            if not connection.is_open:
-                connection.open()
-
-            self._connection = connection
-        elif not self._connection.is_open:
-            # Try to repair the connection
-            self._connection.open()
-
-        if not self._connection.is_open:
-            return False
-
-        return True
+        raise NotImplementedError
 
     def connect(self) -> bool:
         """
@@ -135,7 +109,7 @@ class AXARemote:
         response = self._send_command("VERSION")
         response = self._split_response(response)
         if response[0] == self.RAW_STATUS_VERSION:
-            self.version = response[1]
+            self.version = response[1].split(maxsplit=1)[1]
 
         raw_status = self.raw_status()
         if raw_status[0] == self.RAW_STATUS_STRONG_LOCKED:
@@ -178,8 +152,7 @@ class AXARemote:
         response = None
 
         try:
-            self._connection.reset_input_buffer()
-            self._connection.reset_output_buffer()
+            self._connection.reset()
 
             command = command.upper()
             logger.debug("Command: '%s'", command)
@@ -215,15 +188,10 @@ class AXARemote:
                 response = None
 
             logger.debug("Response: %s", response)
-        except serial.SerialException as ex:
-            logger.exception(
-                "Problem communicating with %s, reason: %s", self._serial_port, ex
-            )
-            response = None
         except UnicodeDecodeError as ex:
             logger.warning(
                 "Error during response decode, invalid response: %s, reason: %s",
-                response.decode(errors="replace"),
+                [s.decode(errors="replace") for s in response],
                 ex,
             )
             response = None
@@ -384,3 +352,76 @@ class AXARemote:
         self._update()
 
         return self._position
+
+
+class AXARemoteSerial(AXARemote):
+    """
+    AXA Remote class for controlling AXA Remote window openers over a serial connection.
+    """
+
+    def __init__(self, serial_port: str) -> None:
+        """
+        Initializes the AXARemote object.
+        """
+        assert serial_port is not None
+
+        self._serial_port = serial_port
+
+    def _connect(self) -> bool:
+        if self._connection is None:
+            connection = AXASerialConnection(self._serial_port)
+
+            if connection.open():
+                self._connection = connection
+
+                return True
+            return False
+
+        if self._connection.open():
+            return True
+
+        return False
+
+    def _send_command(self, command: str) -> str | None:
+        response = None
+
+        try:
+            response = super()._send_command(command)
+        except serial.SerialException as ex:
+            logger.exception(
+                "Problem communicating with %s, reason: %s", self._serial_port, ex
+            )
+            response = None
+
+        return response
+
+
+class AXARemoteTelnet(AXARemote):
+    """
+    AXA Remote class for controlling AXA Remote window openers over a Telnet connection.
+    """
+
+    def __init__(self, host: str, port: int) -> None:
+        """
+        Initializes the AXARemote object.
+        """
+        assert host is not None
+        assert port is not None
+
+        self._host = host
+        self._port = port
+
+    def _connect(self) -> bool:
+        if self._connection is None:
+            connection = AXATelnetConnection(self._host, self._port)
+
+            if connection.open():
+                self._connection = connection
+
+                return True
+            return False
+
+        if self._connection.open():
+            return True
+
+        return False

@@ -7,21 +7,22 @@ import logging
 import time
 import unittest
 
-from axaremote import AXARemote, AXARemoteSerial
+from axaremote import AXARemote, AXARemoteTelnet
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s", level=logging.DEBUG
 )
 
-serial_port = "/dev/tty.usbserial-110"
+host = "kitchen-window.local"
+port = 23
 
 
 class Test(unittest.TestCase):
     _axa = None
 
     def setUp(self):
-        self._axa = AXARemoteSerial(serial_port)
+        self._axa = AXARemoteTelnet(host, port)
         self._axa.connect()
         status = self._axa.status()
         if status != AXARemote.STATUS_LOCKED:

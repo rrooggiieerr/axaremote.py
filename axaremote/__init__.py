@@ -5,6 +5,6 @@ Created on 12 Nov 2022
 
 @author: Rogier van Staveren
 """
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
-from axaremote.axaremote import AXARemote
+from axaremote.axaremote import AXARemote, AXARemoteSerial, AXARemoteTelnet

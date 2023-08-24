@@ -10,7 +10,7 @@ import time
 
 from serial.serialutil import SerialException
 
-from axaremote import AXARemote
+from axaremote import AXARemoteSerial
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(format="%(message)s", level=logging.INFO)
 
-    axa = AXARemote(args.port)
+    axa = AXARemoteSerial(args.port)
     try:
         if args.action == "status":
             if not axa.connect():
