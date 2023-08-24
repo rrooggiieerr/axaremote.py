@@ -1,6 +1,6 @@
 # Python library to control AXA Remote window openers.
 Python library to control AXA Remote window openers over the serial
-interface.
+interface or serial to network bridges like [esp-link](https://github.com/jeelabs/esp-link).
 
 ## Hardware
 If you power the AXA Remote using batteries you can connect the Serial 3.3 or
