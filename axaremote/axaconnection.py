@@ -83,6 +83,9 @@ class AXASerialConnection(AXAConnection):
 
         self._serial_port = serial_port
 
+    def __str__(self):
+        return self._serial_port
+
     def open(self) -> bool:
         if self._connection is None:
             connection = serial.Serial(
@@ -149,6 +152,9 @@ class AXATelnetConnection(AXAConnection):
 
         self._host = host
         self._port = port
+
+    def __str__(self):
+        return f"{self._host}:{self._port}"
 
     def open(self) -> bool:
         if self._connection is None:
