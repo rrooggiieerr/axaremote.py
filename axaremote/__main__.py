@@ -10,7 +10,7 @@ import time
 
 from serial.serialutil import SerialException
 
-from axaremote import AXARemoteSerial
+from axaremote import AXARemoteSerial, AXARemoteTelnet
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,7 +18,16 @@ _LOGGER = logging.getLogger(__name__)
 if __name__ == "__main__":
     # Read command line arguments
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("port")
+
+    subparsers = argparser.add_subparsers()
+
+    serial_parser = subparsers.add_parser("serial")
+    serial_parser.add_argument("serial_port")
+
+    telnet_parser = subparsers.add_parser("telnet")
+    telnet_parser.add_argument("host")
+    telnet_parser.add_argument("port", type=int)
+
     argparser.add_argument("action", choices=["status", "open", "close", "stop"])
     argparser.add_argument("--wait", dest="wait", action="store_true")
     argparser.add_argument("--debug", dest="debugLogging", action="store_true")
@@ -32,7 +41,11 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(format="%(message)s", level=logging.INFO)
 
-    axa = AXARemoteSerial(args.port)
+    if "serial_port" in args:
+        axa = AXARemoteSerial(args.serial_port)
+    elif "host" in args:
+        axa = AXARemoteTelnet(args.host, args.port)
+
     try:
         if args.action == "status":
             if not axa.connect():

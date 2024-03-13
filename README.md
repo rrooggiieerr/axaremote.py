@@ -29,13 +29,22 @@ PIP:
 You can use the Python AXA Remote library directly from the command line to
 open, stop or close your window using the following syntax:
 
-Status of the window: `python3 -m axaremote <serial port> status`  
-Open the window: `python3 -m axaremote <serial port> open`  
-Stop the window: `python3 -m axaremote <serial port> stop`  
-Close the window: `python3 -m axaremote <serial port> close`
+Status of the window: `python3 -m axaremote serial <serial port> status`  
+Open the window: `python3 -m axaremote serial <serial port> open`  
+Stop the window: `python3 -m axaremote serial <serial port> stop`  
+Close the window: `python3 -m axaremote serial <serial port> close`
+
+Or if your projector is connected using a serial to network bridge:
+
+Status of the window: `python3 -m axaremote telnet <host> <port> status`  
+Open the window: `python3 -m axaremote telnet <host> <port> open`  
+Stop the window: `python3 -m axaremote telnet <host> <port> stop`  
+Close the window: `python3 -m axaremote telnet <host> <port> close`
 
 If you add the argument `--wait` to the open or close command the process will
 wait till the window is open/close and show the progress.
+
+## Support my work
 
 Do you enjoy using this Python library? Then consider supporting my work:  
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" >](https://www.buymeacoffee.com/rrooggiieerr)  
