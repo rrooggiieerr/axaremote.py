@@ -122,6 +122,7 @@ class AXARemote(ABC):
     _raw_status: int = RAW_STATUS_STRONG_LOCKED
     _status: int = STATUS_DISCONNECTED
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
+    _target_position: float = None
     _timestamp: float = None
 
     def __init__(
@@ -395,6 +396,9 @@ class AXARemote(ABC):
         if response[0] == self.RAW_STATUS_OK:
             if self._status in [self.STATUS_OPENING, self.STATUS_CLOSING]:
                 self._status = self.STATUS_STOPPED
+
+            self._target_position = None
+
             return True
 
         return False
@@ -420,6 +424,20 @@ class AXARemote(ABC):
 
         return False
 
+    def set_position(self, target_position: float) -> None:
+        """ """
+        assert 0.0 <= target_position <= 100.0
+
+        if int(self._position) == int(target_position):
+            return
+
+        self._target_position = target_position
+
+        if self._position < target_position:
+            self.open()
+        elif self._position > target_position:
+            self.close()
+
     def raw_status(self) -> int:
         """
         Returns the status as given by the AXA Remote
@@ -438,6 +456,18 @@ class AXARemote(ABC):
             return
 
         try:
+            if self._target_position is not None:
+                if (
+                    self._status == self.STATUS_OPENING
+                    and self._position > self._target_position
+                ):
+                    self.stop()
+                elif (
+                    self._status == self.STATUS_CLOSING
+                    and self._position < self._target_position
+                ):
+                    self.stop()
+    
             raw_state = self.raw_status()[0]
             logger.debug("Raw state: %s", raw_state)
             logger.debug("Presumed state: %s", self.STATUSES[self._status])
