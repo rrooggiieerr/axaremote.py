@@ -5,16 +5,69 @@ Created on 12 Nov 2022
 
 @author: Rogier van Staveren
 """
+
 import logging
 import time
-from abc import ABC, abstractmethod
-from os import linesep
+from abc import ABC
 
 import serial
 
-from axaremote.axaconnection import AXASerialConnection, AXATelnetConnection
+from axaremote.axaconnection import (
+    AXAConnection,
+    AXAConnectionError,
+    AXASerialConnection,
+    AXATelnetConnection,
+)
 
 logger = logging.getLogger(__name__)
+
+_BUSY_TIMEOUT = 1
+
+
+class AXARemoteError(Exception):
+    """Generic AXA Remote error."""
+
+    def __init__(self, command=None):
+        self.command = command
+
+
+class EmptyResponseError(AXARemoteError):
+    """
+    Empty response error.
+
+    If the response is empty.
+    """
+
+    def __str__(self):
+        return f"Empty response for command '{self.command}'"
+
+
+class InvallidResponseError(AXARemoteError):
+    """
+    Invalid response error.
+
+    If the response format does not match the expected format.
+    """
+
+    def __init__(self, command=None, response=None):
+        super().__init__(command)
+        self.response = response
+
+    def __str__(self):
+        return (
+            f"Invalid response for command '{self.command}'. response: {self.response}"
+        )
+
+
+class TooBusyError(AXARemoteError):
+    """
+    Too busy error.
+
+    If the serial connection is to busy with processing other commands.
+    """
+
+    def __str__(self):
+        return f"Too busy to send '{self.command}'"
 
 
 class AXARemote(ABC):
@@ -42,6 +95,7 @@ class AXARemote(ABC):
     STATUS_LOCKING = 6
 
     STATUSES = {
+        STATUS_DISCONNECTED: "Disconnected",
         STATUS_STOPPED: "Stopped",
         STATUS_LOCKED: "Locked",
         STATUS_UNLOCKING: "Unlocking",
@@ -53,9 +107,11 @@ class AXARemote(ABC):
 
     _connection = None
     _busy: bool = False
+    _init: bool = True
 
     device: str = None
     version: str = None
+    unique_id: str = None
 
     # Time in seconds to close, lock, unlock and open the AXA Remote
     _TIME_UNLOCK = 5
@@ -67,6 +123,17 @@ class AXARemote(ABC):
     _status: int = STATUS_DISCONNECTED
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
     _timestamp: float = None
+
+    def __init__(
+        self,
+        connection: AXAConnection,
+    ):
+        """
+        Initialises the AXARemote object.
+        """
+        assert connection is not None
+
+        self._connection = connection
 
     def set_position(self, position: float) -> None:
         """
@@ -87,9 +154,23 @@ class AXARemote(ABC):
         else:
             self._status = self.STATUS_STOPPED
 
-    @abstractmethod
     def _connect(self) -> bool:
-        raise NotImplementedError
+        if self._connection and not self._connection.is_open:
+            logger.info("Connecting to %s", self._connection)
+            try:
+                self._connection.open()
+                self._connection.write(b"\r\n")
+                self._connection.reset()
+            except AXAConnectionError as ex:
+                logger.error(
+                    "Problem communicating with %s, reason: %s", self._connection, ex
+                )
+                return False
+
+        if self._connection and self._connection.is_open:
+            return True
+
+        return False
 
     def connect(self) -> bool:
         """
@@ -98,32 +179,51 @@ class AXARemote(ABC):
         if not self._connect():
             return False
 
-        response = self._send_command("DEVICE")
-        if response is None:
-            return False
+        if not self._init:
+            return True
 
-        response = self._split_response(response)
-        if response[0] == self.RAW_STATUS_DEVICE:
+        try:
+            response = self._send_command("DEVICE")
+            if response is None:
+                return False
+
+            response = self._split_response(response)
+            if response[0] != self.RAW_STATUS_DEVICE:
+                return False
             self.device = response[1]
 
-        response = self._send_command("VERSION")
-        response = self._split_response(response)
-        if response[0] == self.RAW_STATUS_VERSION:
+            response = self._send_command("VERSION")
+            if response is None:
+                return False
+
+            response = self._split_response(response)
+            if response[0] != self.RAW_STATUS_VERSION:
+                return False
             self.version = response[1].split(maxsplit=1)[1]
 
-        raw_status = self.raw_status()
-        if raw_status[0] == self.RAW_STATUS_STRONG_LOCKED:
-            self._status = self.STATUS_LOCKED
-            self._position = 0.0
-        elif raw_status[0] == self.RAW_STATUS_WEAK_LOCKED:
-            # Currently handling this state as if it's Strong Locked
-            self._status = self.STATUS_LOCKED
-            self._position = 0.0
-        else:
-            self._status = self.STATUS_OPEN
-            self._position = 100.0
+            self._init = False
 
-        return True
+            raw_status = self.raw_status()[0]
+            if raw_status == self.RAW_STATUS_STRONG_LOCKED:
+                self._status = self.STATUS_LOCKED
+                self._position = 0.0
+            elif raw_status == self.RAW_STATUS_WEAK_LOCKED:
+                # Currently handling this state as if it's Strong Locked
+                self._status = self.STATUS_LOCKED
+                self._position = 0.0
+            else:
+                self._status = self.STATUS_OPEN
+                self._position = 100.0
+
+            return True
+        except AXAConnectionError as ex:
+            logger.error(
+                "Problem communicating with %s, reason: %s", self._connection, ex
+            )
+            return False
+        except AXARemoteError as ex:
+            logger.error(ex)
+            return False
 
     def disconnect(self) -> bool:
         """
@@ -140,65 +240,78 @@ class AXARemote(ABC):
         Send a command to the AXA Remote
         """
 
-        if self._connect() is False:
+        if not self._connect():
             logger.error("Connection not available")
             return None
 
+        start_time = time.time()
         while self._busy is True:
-            logger.info("Too busy for %s", command)
-            time.sleep(0.1)
+            if (time.time() - start_time).total_seconds() > _BUSY_TIMEOUT:
+                logger.error("Too busy for %s", command)
+                raise TooBusyError(command)
+            logger.debug("Busy")
+            time.sleep(0.05)
         self._busy = True
-
-        response = None
 
         try:
             self._connection.reset()
 
             command = command.upper()
             logger.debug("Command: '%s'", command)
-            self._connection.write(b"\r\n")
-            self._connection.readline()
+            # self._connection.write(b"\r\n")
+            # self._connection.reset()
             self._connection.write(f"{command}\r\n".encode("ascii"))
             self._connection.flush()
 
-            response = self._connection.readlines()
-            response = [s.decode() for s in response]
-            response = [s.strip() for s in response]
+            empty_line_count = 0
+            echo_received = None
+            while True:
+                if empty_line_count > 5:
+                    if self._init:
+                        logger.error(
+                            "More than 5 empty responses, is your cable right?"
+                        )
+                    else:
+                        logger.error("More than 5 empty responses")
+                    raise EmptyResponseError(command)
 
-            if len(response) == 0:
-                # Empty response
-                logger.error("Empty response, is your cable right?")
-                return None
+                response = self._connection.readline()
+                response = response.decode().strip(" \n\r")
+                if response == "":
+                    # Sometimes we first receive an empty line
+                    logger.debug("Empty line")
+                    empty_line_count += 1
+                    time.sleep(0.05)
+                    continue
 
-            if response[0] == command:
-                # Command echo
-                logger.debug("Command successfully sent")
-                response.pop(0)
-            else:
-                logger.error("No command echo received")
-                logger.error("Response: %s", response)
-                return None
+                if not echo_received and response == command:
+                    # Command echo
+                    logger.debug("Command successfully sent")
+                    echo_received = True
+                    continue
 
-            if len(response) == 1:
-                response = response[0]
-            else:
-                response = linesep.join(response)
+                if not echo_received:
+                    logger.error(
+                        "No command echo received, response: %s", repr(response)
+                    )
+                    raise InvallidResponseError(command, response)
 
-            if response == "":
-                response = None
-
-            logger.debug("Response: %s", response)
+                logger.debug("Response: %s", repr(response))
+                return response
         except UnicodeDecodeError as ex:
             logger.warning(
                 "Error during response decode, invalid response: %s, reason: %s",
-                [s.decode(errors="replace") for s in response],
+                repr(response),
                 ex,
             )
-            response = None
+            raise InvallidResponseError(command, response) from ex
+        except AXAConnectionError as ex:
+            logger.error(
+                "Problem communicating with %s, reason: %s", self._connection, ex
+            )
+            return None
         finally:
             self._busy = False
-
-        return response
 
     def _split_response(self, response: str):
         if response is not None:
@@ -262,6 +375,9 @@ class AXARemote(ABC):
                 self._timestamp = time.time()
                 self._status = self.STATUS_UNLOCKING
             elif self._status == self.STATUS_STOPPED:
+                self._timestamp = time.time() - (
+                    self._TIME_UNLOCK + (self._TIME_OPEN * (self._position / 100))
+                )
                 self._status = self.STATUS_OPENING
             return True
 
@@ -276,6 +392,10 @@ class AXARemote(ABC):
         response = self._split_response(response)
 
         if response[0] == self.RAW_STATUS_OK:
+            if self._status == self.STATUS_STOPPED:
+                pass
+            elif self._status in [self.STATUS_OPENING, self.STATUS_CLOSING]:
+                self._status = self.STATUS_STOPPED
             return True
 
         return False
@@ -292,6 +412,9 @@ class AXARemote(ABC):
                 self._timestamp = time.time()
                 self._status = self.STATUS_CLOSING
             elif self._status == self.STATUS_STOPPED:
+                self._timestamp = time.time() - (
+                    self._TIME_CLOSE * ((100 - self._position) / 100)
+                )
                 self._status = self.STATUS_CLOSING
 
             return True
@@ -312,29 +435,77 @@ class AXARemote(ABC):
         Synchronises the raw state with the presumed state.
         """
         if self._status == self.STATUS_DISCONNECTED and not self.connect():
-            # Device is still offline
+            logger.debug("Device is still offline")
             return
 
-        raw_state = self.raw_status()
-        if raw_state[0] is None:
-            # Device is offline
-            self._status = self.STATUS_DISCONNECTED
-            return
+        try:
+            raw_state = self.raw_status()[0]
+            logger.debug("Raw state: %s", raw_state)
+            logger.debug("Presumed state: %s", self.STATUSES[self._status])
+            if raw_state is None:
+                # Device is offline
+                self._status = self.STATUS_DISCONNECTED
+                return
 
-        if (
-            raw_state[0] == self.RAW_STATUS_STRONG_LOCKED
-            and self._status != self.STATUS_LOCKED
-        ):
-            logger.info("Raw state and presumed state not in sync, syncronising")
-            self._status = self.STATUS_LOCKED
-            self._position = 0.0
-        elif (
-            raw_state[0] == self.RAW_STATUS_UNLOCKED
-            and self._status == self.STATUS_LOCKED
-        ):
-            logger.info("Raw state and presumed state not in sync, syncronising")
-            self._status = self.STATUS_OPEN
-            self._position = 100.0
+            if raw_state in [
+                self.RAW_STATUS_STRONG_LOCKED,
+                self.RAW_STATUS_WEAK_LOCKED,
+            ] and self._status in [self.STATUS_UNLOCKING, self.STATUS_LOCKING]:
+                self._position = 0.0
+            elif (
+                raw_state
+                in [self.RAW_STATUS_STRONG_LOCKED, self.RAW_STATUS_WEAK_LOCKED]
+                and self._status == self.STATUS_CLOSING
+            ):
+                self._status = self.STATUS_LOCKING
+                self._position = 0.0
+            elif (
+                raw_state == self.RAW_STATUS_UNLOCKED
+                and self._status == self.STATUS_UNLOCKING
+            ):
+                self._status = self.STATUS_OPENING
+                self._position = 0.0
+            elif (
+                raw_state == self.RAW_STATUS_UNLOCKED
+                and self._status == self.STATUS_LOCKED
+            ):
+                logger.info("Raw state and presumed state not in sync, syncronising")
+                self._timestamp = time.time() - self._TIME_UNLOCK
+                self._status = self.STATUS_OPENING
+                self._position = 0.0
+            elif (
+                raw_state
+                in [self.RAW_STATUS_STRONG_LOCKED, self.RAW_STATUS_WEAK_LOCKED]
+                and self._status == self.STATUS_OPEN
+            ):
+                logger.info("Raw state and presumed state not in sync, syncronising")
+                self._timestamp = time.time() - self._TIME_CLOSE
+                self._status = self.STATUS_LOCKING
+                self._position = 0.0
+            elif raw_state in [
+                self.RAW_STATUS_STRONG_LOCKED,
+                self.RAW_STATUS_WEAK_LOCKED,
+            ] and self._status not in [
+                self.STATUS_LOCKED,
+                self.STATUS_UNLOCKING,
+                self.STATUS_CLOSING,
+                self.STATUS_LOCKING,
+            ]:
+                logger.info("Raw state and presumed state not in sync, syncronising")
+                self._status = self.STATUS_LOCKED
+                self._position = 0.0
+            elif raw_state == self.RAW_STATUS_UNLOCKED and self._status in [
+                self.STATUS_LOCKED,
+            ]:
+                logger.info("Raw state and presumed state not in sync, syncronising")
+                self._status = self.STATUS_OPEN
+                self._position = 100.0
+        except AXARemoteError as ex:
+            logger.error(ex)
+        except AXAConnectionError as ex:
+            logger.error(
+                "Problem communicating with %s, reason: %s", self._connection, ex
+            )
 
     def status(self) -> int:
         """
@@ -347,7 +518,7 @@ class AXARemote(ABC):
     def position(self) -> float:
         """
         Returns the current position of the window opener where 0.0 is totally
-        up and 100.0 is fully down.
+        closed and 100.0 is fully open.
         """
         self._update()
 
@@ -365,22 +536,11 @@ class AXARemoteSerial(AXARemote):
         """
         assert serial_port is not None
 
-        self._serial_port = serial_port
+        self.unique_id = serial_port
 
-    def _connect(self) -> bool:
-        if self._connection is None:
-            connection = AXASerialConnection(self._serial_port)
+        connection = AXASerialConnection(serial_port)
 
-            if connection.open():
-                self._connection = connection
-
-                return True
-            return False
-
-        if self._connection.open():
-            return True
-
-        return False
+        super().__init__(connection)
 
     def _send_command(self, command: str) -> str | None:
         response = None
@@ -389,7 +549,7 @@ class AXARemoteSerial(AXARemote):
             response = super()._send_command(command)
         except serial.SerialException as ex:
             logger.exception(
-                "Problem communicating with %s, reason: %s", self._serial_port, ex
+                "Problem communicating with %s, reason: %s", self._connection, ex
             )
             response = None
 
@@ -408,20 +568,8 @@ class AXARemoteTelnet(AXARemote):
         assert host is not None
         assert port is not None
 
-        self._host = host
-        self._port = port
+        self.unique_id = f"{host}:{port}"
 
-    def _connect(self) -> bool:
-        if self._connection is None:
-            connection = AXATelnetConnection(self._host, self._port)
+        connection = AXATelnetConnection(host, port)
 
-            if connection.open():
-                self._connection = connection
-
-                return True
-            return False
-
-        if self._connection.open():
-            return True
-
-        return False
+        super().__init__(connection)

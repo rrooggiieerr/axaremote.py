@@ -5,16 +5,33 @@ Created on 24 Aug 2023
 
 @author: Rogier van Staveren
 """
+
+import logging
 import telnetlib
 from abc import ABC, abstractmethod
 
 import serial
+
+logger = logging.getLogger(__name__)
+
+_SERIAL_TIMEOUT = 1.0
+_TELNET_TIMEOUT = 1.0
+
+
+class AXAConnectionError(Exception):
+    """
+    AXA Connection Error.
+
+    When an error occurs while connecting to the BenQ Projector.
+    """
 
 
 class AXAConnection(ABC):
     """
     Abstract class on which the different connection types are build.
     """
+
+    is_open: bool = False
 
     @abstractmethod
     def open(self) -> bool:
@@ -87,29 +104,32 @@ class AXASerialConnection(AXAConnection):
         return self._serial_port
 
     def open(self) -> bool:
-        if self._connection is None:
-            connection = serial.Serial(
-                port=self._serial_port,
-                baudrate=19200,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_TWO,
-                timeout=1,
-            )
+        try:
+            if self._connection is None:
+                connection = serial.Serial(
+                    port=self._serial_port,
+                    baudrate=19200,
+                    bytesize=serial.EIGHTBITS,
+                    parity=serial.PARITY_NONE,
+                    stopbits=serial.STOPBITS_TWO,
+                    timeout=_SERIAL_TIMEOUT,
+                )
 
-            # Open the connection
-            if not connection.is_open:
-                connection.open()
+                # Open the connection
+                if not connection.is_open:
+                    connection.open()
 
-            self._connection = connection
-        elif not self._connection.is_open:
-            # Try to repair the connection
-            self._connection.open()
+                self._connection = connection
+            elif not self._connection.is_open:
+                # Try to repair the connection
+                self._connection.open()
 
-        if not self._connection.is_open:
-            return False
+            if self._connection.is_open:
+                return True
+        except serial.SerialException as ex:
+            raise AXAConnectionError(str(ex)) from ex
 
-        return True
+        return False
 
     def close(self) -> bool:
         if self._connection is not None:
@@ -119,21 +139,33 @@ class AXASerialConnection(AXAConnection):
         return True
 
     def reset(self) -> bool:
-        self._connection.reset_input_buffer()
-        self._connection.reset_output_buffer()
+        try:
+            self._connection.reset_input_buffer()
+            self._connection.reset_output_buffer()
 
-        return True
+            return True
+        except serial.SerialException as ex:
+            raise AXAConnectionError(str(ex)) from ex
 
     def readline(self) -> str:
-        return self._connection.readline()
+        try:
+            return self._connection.readline()
+        except serial.SerialException as ex:
+            raise AXAConnectionError(str(ex)) from ex
 
     def readlines(self) -> str:
-        return self._connection.readlines()
+        try:
+            return self._connection.readlines()
+        except serial.SerialException as ex:
+            raise AXAConnectionError(str(ex)) from ex
 
     def write(self, data: str) -> bool:
-        self._connection.write(data)
+        try:
+            self._connection.write(data)
 
-        return True
+            return len(data)
+        except serial.SerialException as ex:
+            raise AXAConnectionError(str(ex)) from ex
 
     def flush(self) -> None:
         self._connection.flush()
@@ -157,11 +189,21 @@ class AXATelnetConnection(AXAConnection):
         return f"{self._host}:{self._port}"
 
     def open(self) -> bool:
-        if self._connection is None:
-            connection = telnetlib.Telnet(self._host, self._port, 1)
-            self._connection = connection
+        try:
+            if self._connection is None:
+                connection = telnetlib.Telnet(self._host, self._port, _TELNET_TIMEOUT)
+                self._connection = connection
 
-        return True
+            return True
+        except (OSError, TimeoutError) as ex:
+            raise AXAConnectionError(str(ex)) from ex
+
+    @property
+    def is_open(self):
+        if self._connection:
+            return True
+
+        return False
 
     def close(self) -> bool:
         if self._connection is not None:
@@ -171,14 +213,27 @@ class AXATelnetConnection(AXAConnection):
         return True
 
     def reset(self) -> bool:
-        self.readlines()
+        try:
+            self.readlines()
 
-        return True
+            return True
+        except EOFError as ex:
+            logger.error("Connection lost: %s", ex)
+            self.close()
+            raise AXAConnectionError(str(ex)) from ex
 
     def readline(self) -> str:
-        return self._connection.read_until(b"\r\n", 1)
+        try:
+            return self._connection.read_until(b"\r\n", _TELNET_TIMEOUT / 5)
+        except EOFError as ex:
+            logger.error("Connection lost", ex)
+            self.close()
+            raise AXAConnectionError(str(ex)) from ex
 
-    def write(self, data: str) -> bool:
-        self._connection.write(data)
+    def write(self, data: str) -> int:
+        try:
+            self._connection.write(data)
 
-        return True
+            return len(data)
+        except OSError as ex:
+            raise AXAConnectionError(str(ex)) from ex
