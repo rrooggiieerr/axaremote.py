@@ -135,11 +135,10 @@ class AXARemote(ABC):
 
         self._connection = connection
 
-    def set_position(self, position: float) -> None:
+    def restore_position(self, position: float) -> None:
         """
-        Sets the initial position of the window opener, just like in the constructor.
-
-        Mainly introduced to restore the window opener state in Home Assistant.
+        Restores the position of the window opener, mainly introduced to restore
+        the window opener state in Home Assistant.
 
         Not to be used to move the window opener to a position
         """
