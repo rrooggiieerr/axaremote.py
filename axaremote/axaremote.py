@@ -386,13 +386,14 @@ class AXARemote(ABC):
         """
         Stop the window.
         """
+        if self._status == self.STATUS_LOCKING:
+            return True
+
         response = self._send_command("STOP")
         response = self._split_response(response)
 
         if response[0] == self.RAW_STATUS_OK:
-            if self._status == self.STATUS_STOPPED:
-                pass
-            elif self._status in [self.STATUS_OPENING, self.STATUS_CLOSING]:
+            if self._status in [self.STATUS_OPENING, self.STATUS_CLOSING]:
                 self._status = self.STATUS_STOPPED
             return True
 
