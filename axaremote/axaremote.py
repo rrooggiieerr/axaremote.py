@@ -246,7 +246,7 @@ class AXARemote(ABC):
 
         start_time = time.time()
         while self._busy is True:
-            if (time.time() - start_time).total_seconds() > _BUSY_TIMEOUT:
+            if time.time() - start_time > _BUSY_TIMEOUT:
                 logger.error("Too busy for %s", command)
                 raise TooBusyError(command)
             logger.debug("Busy")
@@ -387,7 +387,6 @@ class AXARemote(ABC):
         """
         Stop the window.
         """
-        # self._timestamp = time.time()
         response = self._send_command("STOP")
         response = self._split_response(response)
 
