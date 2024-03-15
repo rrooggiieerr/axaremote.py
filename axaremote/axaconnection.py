@@ -226,7 +226,7 @@ class AXATelnetConnection(AXAConnection):
         try:
             return self._connection.read_until(b"\r\n", _TELNET_TIMEOUT / 5)
         except EOFError as ex:
-            logger.error("Connection lost", ex)
+            logger.error("Connection lost: %s", ex)
             self.close()
             raise AXAConnectionError(str(ex)) from ex
 
@@ -236,4 +236,6 @@ class AXATelnetConnection(AXAConnection):
 
             return len(data)
         except OSError as ex:
+            logger.error("Connection lost: %s", ex)
+            self.close()
             raise AXAConnectionError(str(ex)) from ex
