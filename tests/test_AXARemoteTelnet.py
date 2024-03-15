@@ -46,14 +46,14 @@ class Test(unittest.TestCase):
     def testConnect(self):
         response = self._axa.connect()
         self.assertTrue(response)
-        self.assertIsNotNone(self._axa._connection)
+        self.assertIsNotNone(self._axa.connection)
         self.assertIsNotNone(self._axa.device)
         self.assertIsNotNone(self._axa.version)
 
     def testDisconnect(self):
         response = self._axa.disconnect()
         self.assertTrue(response)
-        self.assertIsNone(self._axa._connection)
+        self.assertIsNone(self._axa.connection)
 
     def testOpen(self):
         response = self._axa.open()

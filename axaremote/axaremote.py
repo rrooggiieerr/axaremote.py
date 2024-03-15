@@ -85,7 +85,6 @@ class AXARemote(ABC):
     RAW_STATUS_COMMAND_NOT_IMPLEMENTED = 502
 
     # To give better feedback some extra statuses are created
-    STATUS_DISCONNECTED = -1
     STATUS_STOPPED = 0
     STATUS_LOCKED = 1
     STATUS_UNLOCKING = 2
@@ -95,7 +94,6 @@ class AXARemote(ABC):
     STATUS_LOCKING = 6
 
     STATUSES = {
-        STATUS_DISCONNECTED: "Disconnected",
         STATUS_STOPPED: "Stopped",
         STATUS_LOCKED: "Locked",
         STATUS_UNLOCKING: "Unlocking",
@@ -105,9 +103,9 @@ class AXARemote(ABC):
         STATUS_LOCKING: "Locking",
     }
 
-    _connection = None
-    _busy: bool = False
-    _init: bool = True
+    connection = None
+    connected = False
+    busy: bool = False
 
     device: str = None
     version: str = None
@@ -119,8 +117,9 @@ class AXARemote(ABC):
     _TIME_CLOSE = _TIME_OPEN
     _TIME_LOCK = 16
 
+    _init: bool = True
     _raw_status: int = RAW_STATUS_STRONG_LOCKED
-    _status: int = STATUS_DISCONNECTED
+    _status: int = None
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
     _target_position: float = None
     _timestamp: float = None
@@ -134,7 +133,7 @@ class AXARemote(ABC):
         """
         assert connection is not None
 
-        self._connection = connection
+        self.connection = connection
 
     def restore_position(self, position: float) -> None:
         """
@@ -155,19 +154,19 @@ class AXARemote(ABC):
             self._status = self.STATUS_STOPPED
 
     def _connect(self) -> bool:
-        if self._connection and not self._connection.is_open:
-            logger.info("Connecting to %s", self._connection)
+        if self.connection and not self.connection.is_open:
+            logger.info("Connecting to %s", self.connection)
             try:
-                self._connection.open()
-                self._connection.write(b"\r\n")
-                self._connection.reset()
+                self.connection.open()
+                self.connection.write(b"\r\n")
+                self.connection.reset()
             except AXAConnectionError as ex:
                 logger.error(
-                    "Problem communicating with %s, reason: %s", self._connection, ex
+                    "Problem communicating with %s, reason: %s", self.connection, ex
                 )
                 return False
 
-        if self._connection and self._connection.is_open:
+        if self.connection and self.connection.is_open:
             return True
 
         return False
@@ -218,7 +217,7 @@ class AXARemote(ABC):
             return True
         except AXAConnectionError as ex:
             logger.error(
-                "Problem communicating with %s, reason: %s", self._connection, ex
+                "Problem communicating with %s, reason: %s", self.connection, ex
             )
             return False
         except AXARemoteError as ex:
@@ -229,9 +228,9 @@ class AXARemote(ABC):
         """
         Disconnect from the window opener.
         """
-        if self._connection is not None:
-            self._connection.close()
-            self._connection = None
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
 
         return True
 
@@ -241,27 +240,24 @@ class AXARemote(ABC):
         """
 
         if not self._connect():
-            logger.error("Connection not available")
+            logger.error("Device is offline")
+            self.connected = False
             return None
 
         start_time = time.time()
-        while self._busy is True:
+        while self.busy is True:
             if time.time() - start_time > _BUSY_TIMEOUT:
                 logger.error("Too busy for %s", command)
                 raise TooBusyError(command)
             logger.debug("Busy")
             time.sleep(0.05)
-        self._busy = True
+        self.busy = True
 
         try:
-            self._connection.reset()
-
             command = command.upper()
             logger.debug("Command: '%s'", command)
-            # self._connection.write(b"\r\n")
-            # self._connection.reset()
-            self._connection.write(f"{command}\r\n".encode("ascii"))
-            self._connection.flush()
+            self.connection.write(f"{command}\r\n".encode("ascii"))
+            self.connection.flush()
 
             empty_line_count = 0
             echo_received = None
@@ -273,9 +269,10 @@ class AXARemote(ABC):
                         )
                     else:
                         logger.error("More than 5 empty responses")
+                    self.connection.reset()
                     raise EmptyResponseError(command)
 
-                response = self._connection.readline()
+                response = self.connection.readline()
                 response = response.decode().strip(" \n\r")
                 if response == "":
                     # Sometimes we first receive an empty line
@@ -307,11 +304,11 @@ class AXARemote(ABC):
             raise InvallidResponseError(command, response) from ex
         except AXAConnectionError as ex:
             logger.error(
-                "Problem communicating with %s, reason: %s", self._connection, ex
+                "Problem communicating with %s, reason: %s", self.connection, ex
             )
             return None
         finally:
-            self._busy = False
+            self.busy = False
 
     def _split_response(self, response: str):
         if response is not None:
@@ -328,12 +325,21 @@ class AXARemote(ABC):
         the window opener is moving.
         """
         if self._status in [
-            self.STATUS_DISCONNECTED,
             self.STATUS_LOCKED,
             self.STATUS_STOPPED,
             self.STATUS_OPEN,
         ]:
             # Nothing to calculate here.
+            if self._target_position is not None:
+                try:
+                    if self._position < self._target_position:
+                        self._open()
+                    elif self._position > self._target_position:
+                        self._close()
+                except AXARemoteError as ex:
+                    logger.error(
+                        "Problem communicating with %s, reason: %s", self.connection, ex
+                    )
             return
 
         time_passed = time.time() - self._timestamp
@@ -355,6 +361,7 @@ class AXARemote(ABC):
                 self._position = 100 - ((time_passed / self._TIME_CLOSE) * 100.0)
             else:
                 self._status = self.STATUS_LOCKING
+                self._target_position = None
         if self._status == self.STATUS_LOCKING:
             self._position = 100 - (
                 ((time_passed - self._TIME_CLOSE) / self._TIME_LOCK) * 100.0
@@ -363,7 +370,24 @@ class AXARemote(ABC):
                 self._status = self.STATUS_LOCKED
                 self._position = 0.0
 
-    def open(self) -> bool:
+        logger.debug("%s: %5.1f %%", self.STATUSES[self._status], self._position)
+
+        if self._target_position is not None:
+            try:
+                if (
+                    self._status == self.STATUS_OPENING
+                    and self._position > self._target_position
+                ) or (
+                    self._status == self.STATUS_CLOSING
+                    and self._position < self._target_position
+                ):
+                    self._stop()
+            except AXARemoteError as ex:
+                logger.error(
+                    "Problem communicating with %s, reason: %s", self.connection, ex
+                )
+
+    def _open(self) -> bool:
         """
         Open the window.
         """
@@ -383,7 +407,11 @@ class AXARemote(ABC):
 
         return False
 
-    def stop(self) -> bool:
+    def open(self) -> bool:
+        self._target_position = 100.0
+        return self._open()
+
+    def _stop(self) -> bool:
         """
         Stop the window.
         """
@@ -403,7 +431,11 @@ class AXARemote(ABC):
 
         return False
 
-    def close(self) -> bool:
+    def stop(self) -> bool:
+        self._target_position = self._position
+        return self._stop()
+
+    def _close(self) -> bool:
         """
         Close the window.
         """
@@ -424,6 +456,10 @@ class AXARemote(ABC):
 
         return False
 
+    def close(self) -> bool:
+        self._target_position = 0.0
+        return self._close()
+
     def set_position(self, target_position: float) -> None:
         """
         Initiates the window opener to move to a given position.
@@ -434,19 +470,17 @@ class AXARemote(ABC):
         assert 0.0 <= target_position <= 100.0
 
         if int(target_position) == 0:
-            self._target_position = None
             self.close()
         elif int(target_position) == 100:
-            self._target_position = None
             self.open()
         elif int(self._position) == int(target_position):
             return
         elif self._position < target_position:
             self._target_position = target_position
-            self.open()
+            self._open()
         elif self._position > target_position:
             self._target_position = target_position
-            self.close()
+            self._close()
 
     def raw_status(self) -> int:
         """
@@ -461,30 +495,23 @@ class AXARemote(ABC):
         """
         Synchronises the raw state with the presumed state.
         """
-        if self._status == self.STATUS_DISCONNECTED and not self.connect():
-            logger.debug("Device is still offline")
-            return
+        if not self.connect():
+            # Device is offline
+            if self.connected:
+                logger.debug("Device is offline")
+            else:
+                logger.debug("Device is still offline")
+            self.connected = False
+            return self.status()
+
+        self.connected = True
 
         try:
-            if self._target_position is not None:
-                if (
-                    self._status == self.STATUS_OPENING
-                    and self._position > self._target_position
-                ):
-                    self.stop()
-                elif (
-                    self._status == self.STATUS_CLOSING
-                    and self._position < self._target_position
-                ):
-                    self.stop()
-
             raw_state = self.raw_status()[0]
             logger.debug("Raw state: %s", raw_state)
             logger.debug("Presumed state: %s", self.STATUSES[self._status])
             if raw_state is None:
-                # Device is offline
-                self._status = self.STATUS_DISCONNECTED
-                return
+                return self.status()
 
             if raw_state in [
                 self.RAW_STATUS_STRONG_LOCKED,
@@ -496,8 +523,10 @@ class AXARemote(ABC):
                 in [self.RAW_STATUS_STRONG_LOCKED, self.RAW_STATUS_WEAK_LOCKED]
                 and self._status == self.STATUS_CLOSING
             ):
+                self._timestamp = time.time() - self._TIME_CLOSE
                 self._status = self.STATUS_LOCKING
                 self._position = 0.0
+                self._target_position = None
             elif (
                 raw_state == self.RAW_STATUS_UNLOCKED
                 and self._status == self.STATUS_UNLOCKING
@@ -521,6 +550,7 @@ class AXARemote(ABC):
                 self._timestamp = time.time() - self._TIME_CLOSE
                 self._status = self.STATUS_LOCKING
                 self._position = 0.0
+                self._target_position = None
             elif raw_state in [
                 self.RAW_STATUS_STRONG_LOCKED,
                 self.RAW_STATUS_WEAK_LOCKED,
@@ -543,24 +573,24 @@ class AXARemote(ABC):
             logger.error(ex)
         except AXAConnectionError as ex:
             logger.error(
-                "Problem communicating with %s, reason: %s", self._connection, ex
+                "Problem communicating with %s, reason: %s", self.connection, ex
             )
 
-    def status(self) -> int:
+        return self.status()
+
+    def status(self) -> [int, float]:
         """
         Returns the current status of the window opener.
         """
         self._update()
 
-        return self._status
+        return [self._status, self._position]
 
     def position(self) -> float:
         """
         Returns the current position of the window opener where 0.0 is totally
         closed and 100.0 is fully open.
         """
-        self._update()
-
         return self._position
 
 
@@ -580,19 +610,6 @@ class AXARemoteSerial(AXARemote):
         connection = AXASerialConnection(serial_port)
 
         super().__init__(connection)
-
-    def _send_command(self, command: str) -> str | None:
-        response = None
-
-        try:
-            response = super()._send_command(command)
-        except serial.SerialException as ex:
-            logger.exception(
-                "Problem communicating with %s, reason: %s", self._connection, ex
-            )
-            response = None
-
-        return response
 
 
 class AXARemoteTelnet(AXARemote):

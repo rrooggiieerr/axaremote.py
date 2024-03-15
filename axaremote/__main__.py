@@ -9,9 +9,7 @@ import logging
 import sys
 import time
 
-from serial.serialutil import SerialException
-
-from axaremote import AXARemoteSerial, AXARemoteTelnet
+from axaremote import AXARemoteError, AXARemoteSerial, AXARemoteTelnet
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,8 +61,7 @@ if __name__ == "__main__":
                 _LOGGER.info("AXA Remote is opening")
                 if args.wait:
                     while True:
-                        status: int = axa.status()
-                        position: float = axa.position()
+                        [status, position] = axa.sync_status()
                         if not args.debugLogging:
                             print(
                                 f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
@@ -82,8 +79,7 @@ if __name__ == "__main__":
                 _LOGGER.info("AXA Remote is closing")
                 if args.wait:
                     while True:
-                        status: int = axa.status()
-                        position: float = axa.position()
+                        [status, position] = axa.sync_status()
                         if not args.debugLogging:
                             print(
                                 f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
@@ -98,8 +94,10 @@ if __name__ == "__main__":
         elif args.action == "stop":
             if axa.stop():
                 _LOGGER.info("AXA Remote stopped")
-    except SerialException as e:
-        _LOGGER.error("Failed to connect to AXA Remote, reason: %s", e)
+    except AXARemoteError as e:
+        _LOGGER.error(
+            "Error communicating with AXA Remote on %s, reason: %s", axa.connection, e
+        )
         sys.exit(1)
     except KeyboardInterrupt:
         # Handle keyboard interrupt
