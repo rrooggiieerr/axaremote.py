@@ -131,6 +131,13 @@ class AXASerialConnection(AXAConnection):
 
         return False
 
+    @property
+    def is_open(self):
+        if self._connection and self._connection.is_open:
+            return True
+
+        return False
+
     def close(self) -> bool:
         if self._connection is not None:
             self._connection.close()
