@@ -425,17 +425,27 @@ class AXARemote(ABC):
         return False
 
     def set_position(self, target_position: float) -> None:
-        """ """
+        """
+        Initiates the window opener to move to a given position.
+
+        sync_status() needs to be called regularly to calculate the current
+        position and stop the move once the given position is reaced.
+        """
         assert 0.0 <= target_position <= 100.0
 
-        if int(self._position) == int(target_position):
+        if int(target_position) == 0:
+            self._target_position = None
+            self.close()
+        elif int(target_position) == 100:
+            self._target_position = None
+            self.open()
+        elif int(self._position) == int(target_position):
             return
-
-        self._target_position = target_position
-
-        if self._position < target_position:
+        elif self._position < target_position:
+            self._target_position = target_position
             self.open()
         elif self._position > target_position:
+            self._target_position = target_position
             self.close()
 
     def raw_status(self) -> int:
@@ -467,7 +477,7 @@ class AXARemote(ABC):
                     and self._position < self._target_position
                 ):
                     self.stop()
-    
+
             raw_state = self.raw_status()[0]
             logger.debug("Raw state: %s", raw_state)
             logger.debug("Presumed state: %s", self.STATUSES[self._status])
