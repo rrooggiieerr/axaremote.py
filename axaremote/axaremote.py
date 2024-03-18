@@ -314,7 +314,8 @@ class AXARemote(ABC):
         if response is not None:
             result = response.split(maxsplit=1)
             if len(result) == 2:
-                result[0] = int(result[0])
+                if result[0].isdigit():
+                    result[0] = int(result[0])
                 return result
 
         return (None, response)
