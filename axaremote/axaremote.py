@@ -267,8 +267,6 @@ class AXARemote(ABC):
                         logger.error(
                             "More than 5 empty responses, is your cable right?"
                         )
-                    else:
-                        logger.error("More than 5 empty responses")
                     self.connection.write(b"\r\n")
                     self.connection.reset()
                     raise EmptyResponseError(command)
@@ -573,6 +571,8 @@ class AXARemote(ABC):
                 self._status = self.STATUS_OPEN
                 self._position = 100.0
         except InvallidResponseError as ex:
+            logger.warning(ex)
+        except EmptyResponseError as ex:
             logger.warning(ex)
         except AXARemoteError as ex:
             logger.error(ex)
