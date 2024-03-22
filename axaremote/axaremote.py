@@ -55,7 +55,7 @@ class InvallidResponseError(AXARemoteError):
 
     def __str__(self):
         return (
-            f"Invalid response for command '{self.command}'. response: {self.response}"
+            f"Invalid response for command '{self.command}'. response: {repr(self.response)}"
         )
 
 
@@ -269,11 +269,12 @@ class AXARemote(ABC):
                         )
                     else:
                         logger.error("More than 5 empty responses")
+                    self.connection.write(b"\r\n")
                     self.connection.reset()
                     raise EmptyResponseError(command)
 
                 response = self.connection.readline()
-                response = response.decode().strip(" \n\r")
+                response = response.decode(errors='ignore').strip(" \n\r")
                 if response == "":
                     # Sometimes we first receive an empty line
                     logger.debug("Empty line")
@@ -285,10 +286,11 @@ class AXARemote(ABC):
                     # Command echo
                     logger.debug("Command successfully sent")
                     echo_received = True
+                    empty_line_count = 0
                     continue
 
                 if not echo_received:
-                    logger.error(
+                    logger.warning(
                         "No command echo received, response: %s", repr(response)
                     )
                     raise InvallidResponseError(command, response)
@@ -570,6 +572,8 @@ class AXARemote(ABC):
                 logger.info("Raw state and presumed state not in sync, syncronising")
                 self._status = self.STATUS_OPEN
                 self._position = 100.0
+        except InvallidResponseError as ex:
+            logger.warning(ex)
         except AXARemoteError as ex:
             logger.error(ex)
         except AXAConnectionError as ex:

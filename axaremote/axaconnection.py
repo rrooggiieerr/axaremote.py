@@ -231,7 +231,7 @@ class AXATelnetConnection(AXAConnection):
 
     def readline(self) -> str:
         try:
-            return self._connection.read_until(b"\r\n", _TELNET_TIMEOUT / 5)
+            return self._connection.read_until(b"\r", _TELNET_TIMEOUT)
         except EOFError as ex:
             logger.error("Connection lost: %s", ex)
             self.close()
