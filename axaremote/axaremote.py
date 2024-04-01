@@ -83,13 +83,13 @@ class AXARawStatus(Enum):
 
     def __str__(self):
         return {
-            self.OK: "Ok",
+            self.OK: "OK",
             self.UNLOCKED: "UnLocked",
             self.STRONG_LOCKED: "Strong Locked",
             self.WEAK_LOCKED: "Weak Locked",
             self.DEVICE: "Device",
             self.VERSION: "Firmware",
-            self.COMMAND_NOT_IMPLEMENTED: "Command not Implemented",
+            self.COMMAND_NOT_IMPLEMENTED: "Command not implemented",
         }[self]
 
 
