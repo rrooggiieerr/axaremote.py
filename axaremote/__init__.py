@@ -13,4 +13,5 @@ from axaremote.axaremote import (
     AXARemoteError,
     AXARemoteSerial,
     AXARemoteTelnet,
+    AXAStatus,
 )

@@ -9,7 +9,7 @@ import logging
 import sys
 import time
 
-from axaremote import AXARemoteError, AXARemoteSerial, AXARemoteTelnet
+from axaremote import AXARemoteError, AXARemoteSerial, AXARemoteTelnet, AXAStatus
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,12 +63,10 @@ if __name__ == "__main__":
                     while True:
                         [status, position] = axa.sync_status()
                         if not args.debugLogging:
-                            print(
-                                f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
-                            )
+                            print(f"{status:9}: {position:5.1f} %", end="\r")
                         else:
-                            _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
-                        if status == axa.STATUS_OPEN:
+                            _LOGGER.info("%s: %5.1f %%", status, position)
+                        if status == AXAStatus.OPEN:
                             if not args.debugLogging:
                                 print()
                             break
@@ -81,12 +79,10 @@ if __name__ == "__main__":
                     while True:
                         [status, position] = axa.sync_status()
                         if not args.debugLogging:
-                            print(
-                                f"{axa.STATUSES[status]:9}: {position:5.1f} %", end="\r"
-                            )
+                            print(f"{status:9}: {position:5.1f} %", end="\r")
                         else:
-                            _LOGGER.info("%s: %5.1f %%", axa.STATUSES[status], position)
-                        if status == axa.STATUS_LOCKED:
+                            _LOGGER.info("%s: %5.1f %%", status, position)
+                        if status == AXAStatus.LOCKED:
                             if not args.debugLogging:
                                 print()
                             break

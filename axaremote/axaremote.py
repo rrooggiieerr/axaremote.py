@@ -9,6 +9,8 @@ Created on 12 Nov 2022
 import logging
 import time
 from abc import ABC
+from enum import Enum
+from typing import Final
 
 from axaremote.axaconnection import (
     AXAConnection,
@@ -66,38 +68,60 @@ class TooBusyError(AXARemoteError):
         return f"Too busy to send '{self.command}'"
 
 
+class AXARawStatus(Enum):
+    """
+    Status codes as returned by the AXA Remote
+    """
+
+    OK: Final = 200
+    UNLOCKED: Final = 210
+    STRONG_LOCKED: Final = 211
+    WEAK_LOCKED: Final = 212
+    DEVICE: Final = 260
+    VERSION: Final = 261
+    COMMAND_NOT_IMPLEMENTED: Final = 502
+
+    def __str__(self):
+        return {
+            self.OK: "Ok",
+            self.UNLOCKED: "UnLocked",
+            self.STRONG_LOCKED: "Strong Locked",
+            self.WEAK_LOCKED: "Weak Locked",
+            self.DEVICE: "Device",
+            self.VERSION: "Firmware",
+            self.COMMAND_NOT_IMPLEMENTED: "Command not Implemented",
+        }[self]
+
+
+class AXAStatus(Enum):
+    """
+    To give better feedback some extra statuses are created
+    """
+
+    STOPPED: Final = 0
+    LOCKED: Final = 1
+    UNLOCKING: Final = 2
+    OPENING: Final = 3
+    OPEN: Final = 4
+    CLOSING: Final = 5
+    LOCKING: Final = 6
+
+    def __str__(self):
+        return {
+            self.STOPPED: "Stopped",
+            self.LOCKED: "Locked",
+            self.UNLOCKING: "Unlocking",
+            self.OPENING: "Opening",
+            self.OPEN: "Open",
+            self.CLOSING: "Closing",
+            self.LOCKING: "Locking",
+        }[self]
+
+
 class AXARemote(ABC):
     """
-    AXA Remote class for controlling AXA Remote window openers.
+    AXARemote basse class for interfacing with AXA Remote window openers.
     """
-
-    # Status codes as given by the AXA Remote
-    RAW_STATUS_OK = 200
-    RAW_STATUS_UNLOCKED = 210
-    RAW_STATUS_STRONG_LOCKED = 211
-    RAW_STATUS_WEAK_LOCKED = 212  # I have seen this state only once
-    RAW_STATUS_DEVICE = 260
-    RAW_STATUS_VERSION = 261
-    RAW_STATUS_COMMAND_NOT_IMPLEMENTED = 502
-
-    # To give better feedback some extra statuses are created
-    STATUS_STOPPED = 0
-    STATUS_LOCKED = 1
-    STATUS_UNLOCKING = 2
-    STATUS_OPENING = 3
-    STATUS_OPEN = 4
-    STATUS_CLOSING = 5
-    STATUS_LOCKING = 6
-
-    STATUSES = {
-        STATUS_STOPPED: "Stopped",
-        STATUS_LOCKED: "Locked",
-        STATUS_UNLOCKING: "Unlocking",
-        STATUS_OPENING: "Opening",
-        STATUS_OPEN: "Open",
-        STATUS_CLOSING: "Closing",
-        STATUS_LOCKING: "Locking",
-    }
 
     connection = None
     connected = False
@@ -114,8 +138,8 @@ class AXARemote(ABC):
     _TIME_LOCK = 16
 
     _init: bool = True
-    _raw_status: int = RAW_STATUS_STRONG_LOCKED
-    _status: int = None
+    _raw_status: AXARawStatus = AXARawStatus.STRONG_LOCKED
+    _status: AXAStatus = None
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
     _target_position: float = None
     _timestamp: float = None
@@ -143,11 +167,11 @@ class AXARemote(ABC):
         self._position = position
 
         if self._position == 0.0:
-            self._status = self.STATUS_LOCKED
+            self._status = AXAStatus.LOCKED
         elif self._position == 100.0:
-            self._status = self.STATUS_OPEN
+            self._status = AXAStatus.OPEN
         else:
-            self._status = self.STATUS_STOPPED
+            self._status = AXAStatus.STOPPED
 
     def _connect(self) -> bool:
         if self.connection and not self.connection.is_open:
@@ -183,7 +207,7 @@ class AXARemote(ABC):
                 return False
 
             response = self._split_response(response)
-            if response[0] != self.RAW_STATUS_DEVICE:
+            if response[0] != AXARawStatus.DEVICE:
                 return False
             self.device = response[1]
 
@@ -192,22 +216,22 @@ class AXARemote(ABC):
                 return False
 
             response = self._split_response(response)
-            if response[0] != self.RAW_STATUS_VERSION:
+            if response[0] != AXARawStatus.VERSION:
                 return False
             self.version = response[1].split(maxsplit=1)[1]
 
             self._init = False
 
-            raw_status = self.raw_status()[0]
-            if raw_status == self.RAW_STATUS_STRONG_LOCKED:
-                self._status = self.STATUS_LOCKED
+            raw_status = AXARawStatus(self.raw_status()[0])
+            if raw_status == AXARawStatus.STRONG_LOCKED:
+                self._status = AXAStatus.LOCKED
                 self._position = 0.0
-            elif raw_status == self.RAW_STATUS_WEAK_LOCKED:
+            elif raw_status == AXARawStatus.WEAK_LOCKED:
                 # Currently handling this state as if it's Strong Locked
-                self._status = self.STATUS_LOCKED
+                self._status = AXAStatus.LOCKED
                 self._position = 0.0
             else:
-                self._status = self.STATUS_OPEN
+                self._status = AXAStatus.OPEN
                 self._position = 100.0
 
             return True
@@ -308,8 +332,11 @@ class AXARemote(ABC):
         if response is not None:
             result = response.split(maxsplit=1)
             if len(result) == 2:
-                if result[0].isdigit():
-                    result[0] = int(result[0])
+                try:
+                    if result[0].isdigit():
+                        result[0] = AXARawStatus(int(result[0]))
+                except ValueError as ex:
+                    logger.warning(ex)
                 return result
 
         return (None, response)
@@ -320,9 +347,9 @@ class AXARemote(ABC):
         moving.
         """
         if self._status in [
-            self.STATUS_LOCKED,
-            self.STATUS_STOPPED,
-            self.STATUS_OPEN,
+            AXAStatus.LOCKED,
+            AXAStatus.STOPPED,
+            AXAStatus.OPEN,
         ]:
             # Nothing to calculate here.
             if self._target_position is not None:
@@ -338,42 +365,42 @@ class AXARemote(ABC):
             return
 
         time_passed = time.time() - self._timestamp
-        if self._status == self.STATUS_UNLOCKING:
+        if self._status == AXAStatus.UNLOCKING:
             if time_passed < self._TIME_UNLOCK:
                 self._position = (time_passed / self._TIME_UNLOCK) * 100.0
             else:
-                self._status = self.STATUS_OPENING
-        if self._status == self.STATUS_OPENING:
+                self._status = AXAStatus.OPENING
+        if self._status == AXAStatus.OPENING:
             self._position = (
                 (time_passed - self._TIME_UNLOCK) / self._TIME_OPEN
             ) * 100.0
             if time_passed > (self._TIME_UNLOCK + self._TIME_OPEN):
-                self._status = self.STATUS_OPEN
+                self._status = AXAStatus.OPEN
                 self._position = 100.0
 
-        if self._status == self.STATUS_CLOSING:
+        if self._status == AXAStatus.CLOSING:
             if time_passed < self._TIME_CLOSE:
                 self._position = 100 - ((time_passed / self._TIME_CLOSE) * 100.0)
             else:
-                self._status = self.STATUS_LOCKING
+                self._status = AXAStatus.LOCKING
                 self._target_position = None
-        if self._status == self.STATUS_LOCKING:
+        if self._status == AXAStatus.LOCKING:
             self._position = 100 - (
                 ((time_passed - self._TIME_CLOSE) / self._TIME_LOCK) * 100.0
             )
             if time_passed > (self._TIME_CLOSE + self._TIME_LOCK):
-                self._status = self.STATUS_LOCKED
+                self._status = AXAStatus.LOCKED
                 self._position = 0.0
 
-        logger.debug("%s: %5.1f %%", self.STATUSES[self._status], self._position)
+        logger.debug("%s: %5.1f %%", self._status, self._position)
 
         if self._target_position is not None:
             try:
                 if (
-                    self._status == self.STATUS_OPENING
+                    self._status == AXAStatus.OPENING
                     and self._position > self._target_position
                 ) or (
-                    self._status == self.STATUS_CLOSING
+                    self._status == AXAStatus.CLOSING
                     and self._position < self._target_position
                 ):
                     self._stop()
@@ -389,15 +416,15 @@ class AXARemote(ABC):
         response = self._send_command("OPEN")
         response = self._split_response(response)
 
-        if response[0] == self.RAW_STATUS_OK:
-            if self._status == self.STATUS_LOCKED:
+        if response[0] == AXARawStatus.OK:
+            if self._status == AXAStatus.LOCKED:
                 self._timestamp = time.time()
-                self._status = self.STATUS_UNLOCKING
-            elif self._status == self.STATUS_STOPPED:
+                self._status = AXAStatus.UNLOCKING
+            elif self._status == AXAStatus.STOPPED:
                 self._timestamp = time.time() - (
                     self._TIME_UNLOCK + (self._TIME_OPEN * (self._position / 100))
                 )
-                self._status = self.STATUS_OPENING
+                self._status = AXAStatus.OPENING
             return True
 
         return False
@@ -413,15 +440,15 @@ class AXARemote(ABC):
         """
         Stop the window.
         """
-        if self._status == self.STATUS_LOCKING:
+        if self._status == AXAStatus.LOCKING:
             return True
 
         response = self._send_command("STOP")
         response = self._split_response(response)
 
-        if response[0] == self.RAW_STATUS_OK:
-            if self._status in [self.STATUS_OPENING, self.STATUS_CLOSING]:
-                self._status = self.STATUS_STOPPED
+        if response[0] == AXARawStatus.OK:
+            if self._status in [AXAStatus.OPENING, AXAStatus.CLOSING]:
+                self._status = AXAStatus.STOPPED
 
             self._target_position = None
 
@@ -443,15 +470,15 @@ class AXARemote(ABC):
         response = self._send_command("CLOSE")
         response = self._split_response(response)
 
-        if response[0] == self.RAW_STATUS_OK:
-            if self._status == self.STATUS_OPEN:
+        if response[0] == AXARawStatus.OK:
+            if self._status == AXAStatus.OPEN:
                 self._timestamp = time.time()
-                self._status = self.STATUS_CLOSING
-            elif self._status == self.STATUS_STOPPED:
+                self._status = AXAStatus.CLOSING
+            elif self._status == AXAStatus.STOPPED:
                 self._timestamp = time.time() - (
                     self._TIME_CLOSE * ((100 - self._position) / 100)
                 )
-                self._status = self.STATUS_CLOSING
+                self._status = AXAStatus.CLOSING
 
             return True
 
@@ -486,7 +513,7 @@ class AXARemote(ABC):
             self._target_position = target_position
             self._close()
 
-    def raw_status(self) -> int:
+    def raw_status(self) -> AXARawStatus:
         """
         Returns the status as given by the AXA Remote.
         """
@@ -513,65 +540,62 @@ class AXARemote(ABC):
         try:
             raw_state = self.raw_status()[0]
             logger.debug("Raw state: %s", raw_state)
-            logger.debug("Presumed state: %s", self.STATUSES[self._status])
+            logger.debug("Presumed state: %s", self._status)
             if raw_state is None:
                 return self.status()
 
             if raw_state in [
-                self.RAW_STATUS_STRONG_LOCKED,
-                self.RAW_STATUS_WEAK_LOCKED,
-            ] and self._status in [self.STATUS_UNLOCKING, self.STATUS_LOCKING]:
+                AXARawStatus.STRONG_LOCKED,
+                AXARawStatus.WEAK_LOCKED,
+            ] and self._status in [AXAStatus.UNLOCKING, AXAStatus.LOCKING]:
                 self._position = 0.0
             elif (
-                raw_state
-                in [self.RAW_STATUS_STRONG_LOCKED, self.RAW_STATUS_WEAK_LOCKED]
-                and self._status == self.STATUS_CLOSING
+                raw_state in [AXARawStatus.STRONG_LOCKED, AXARawStatus.WEAK_LOCKED]
+                and self._status == AXAStatus.CLOSING
             ):
                 self._timestamp = time.time() - self._TIME_CLOSE
-                self._status = self.STATUS_LOCKING
+                self._status = AXAStatus.LOCKING
                 self._position = 0.0
                 self._target_position = None
             elif (
-                raw_state == self.RAW_STATUS_UNLOCKED
-                and self._status == self.STATUS_UNLOCKING
+                raw_state == AXARawStatus.UNLOCKED
+                and self._status == AXAStatus.UNLOCKING
             ):
-                self._status = self.STATUS_OPENING
+                self._status = AXAStatus.OPENING
                 self._position = 0.0
             elif (
-                raw_state == self.RAW_STATUS_UNLOCKED
-                and self._status == self.STATUS_LOCKED
+                raw_state == AXARawStatus.UNLOCKED and self._status == AXAStatus.LOCKED
             ):
                 logger.info("Raw state and presumed state not in sync, syncronising")
                 self._timestamp = time.time() - self._TIME_UNLOCK
-                self._status = self.STATUS_OPENING
+                self._status = AXAStatus.OPENING
                 self._position = 0.0
             elif (
-                raw_state
-                in [self.RAW_STATUS_STRONG_LOCKED, self.RAW_STATUS_WEAK_LOCKED]
-                and self._status == self.STATUS_OPEN
+                raw_state in [AXARawStatus.STRONG_LOCKED, AXARawStatus.WEAK_LOCKED]
+                and self._status == AXAStatus.OPEN
             ):
                 logger.info("Raw state and presumed state not in sync, syncronising")
                 self._timestamp = time.time() - self._TIME_CLOSE
-                self._status = self.STATUS_LOCKING
+                self._status = AXAStatus.LOCKING
                 self._position = 0.0
                 self._target_position = None
             elif raw_state in [
-                self.RAW_STATUS_STRONG_LOCKED,
-                self.RAW_STATUS_WEAK_LOCKED,
+                AXARawStatus.STRONG_LOCKED,
+                AXARawStatus.WEAK_LOCKED,
             ] and self._status not in [
-                self.STATUS_LOCKED,
-                self.STATUS_UNLOCKING,
-                self.STATUS_CLOSING,
-                self.STATUS_LOCKING,
+                AXAStatus.LOCKED,
+                AXAStatus.UNLOCKING,
+                AXAStatus.CLOSING,
+                AXAStatus.LOCKING,
             ]:
                 logger.info("Raw state and presumed state not in sync, syncronising")
-                self._status = self.STATUS_LOCKED
+                self._status = AXAStatus.LOCKED
                 self._position = 0.0
-            elif raw_state == self.RAW_STATUS_UNLOCKED and self._status in [
-                self.STATUS_LOCKED,
+            elif raw_state == AXARawStatus.UNLOCKED and self._status in [
+                AXAStatus.LOCKED,
             ]:
                 logger.info("Raw state and presumed state not in sync, syncronising")
-                self._status = self.STATUS_OPEN
+                self._status = AXAStatus.OPEN
                 self._position = 100.0
         except InvallidResponseError as ex:
             logger.warning(ex)
