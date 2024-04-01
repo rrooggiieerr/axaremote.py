@@ -3,11 +3,12 @@ Created on 12 Nov 2022
 
 @author: Rogier van Staveren
 """
+
 import logging
 import time
 import unittest
 
-from axaremote import AXARemote, AXARemoteTelnet
+from axaremote import AXARemote, AXARemoteTelnet, AXAStatus
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -25,7 +26,7 @@ class Test(unittest.TestCase):
         self._axa = AXARemoteTelnet(host, port)
         self._axa.connect()
         status = self._axa.status()
-        if status != AXARemote.STATUS_LOCKED:
+        if status != AXAStatus.LOCKED:
             logger.info("Resetting AXA Remote to Locked Position")
             self._axa.close()
             time.sleep(AXARemote._TIME_CLOSE + AXARemote._TIME_LOCK)
@@ -36,7 +37,7 @@ class Test(unittest.TestCase):
         if self._axa is not None:
             self._axa.sync_status()
             status = self._axa.status()
-            if status != AXARemote.STATUS_LOCKED:
+            if status != AXAStatus.LOCKED:
                 logger.info("Resetting AXA Remote to Locked Position")
                 self._axa.close()
                 time.sleep(AXARemote._TIME_CLOSE + AXARemote._TIME_LOCK)
@@ -64,7 +65,7 @@ class Test(unittest.TestCase):
         self._axa.open()
         time.sleep(AXARemote._TIME_UNLOCK / 2)
         status = self._axa.status()
-        self.assertIs(AXARemote.STATUS_UNLOCKING, status)
+        self.assertIs(AXAStatus.UNLOCKING, status)
         self._axa.stop()
 
     def testStop(self):
@@ -85,7 +86,7 @@ class Test(unittest.TestCase):
         self._axa.close()
         time.sleep(AXARemote._TIME_CLOSE / 2)
         status = self._axa.status()
-        self.assertIs(AXARemote.STATUS_CLOSING, status)
+        self.assertIs(AXAStatus.CLOSING, status)
         position = self._axa.position()
         self.assertAlmostEqual(50.0, position, delta=1)
 
@@ -95,90 +96,90 @@ class Test(unittest.TestCase):
         self._axa.close()
         time.sleep(AXARemote._TIME_CLOSE + (AXARemote._TIME_LOCK / 2))
         status = self._axa.status()
-        self.assertIs(AXARemote.STATUS_LOCKING, status)
+        self.assertIs(AXAStatus.LOCKING, status)
 
     def testUpdateUnlocking(self):
-        self._axa._status = AXARemote.STATUS_UNLOCKING
+        self._axa._status = AXAStatus.UNLOCKING
         self._axa._position = 0
         self._axa._timestamp = time.time()
         time.sleep(self._axa._TIME_UNLOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_UNLOCKING, self._axa._status)
+        self.assertIs(AXAStatus.UNLOCKING, self._axa._status)
         self.assertAlmostEqual(25.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_UNLOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_UNLOCKING, self._axa._status)
+        self.assertIs(AXAStatus.UNLOCKING, self._axa._status)
         self.assertAlmostEqual(50.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_UNLOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_UNLOCKING, self._axa._status)
+        self.assertIs(AXAStatus.UNLOCKING, self._axa._status)
         self.assertAlmostEqual(75.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_UNLOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_OPENING, self._axa._status)
+        self.assertIs(AXAStatus.OPENING, self._axa._status)
         self.assertAlmostEqual(0.0, self._axa._position, delta=1)
 
     def testUpdateOpening(self):
-        self._axa._status = AXARemote.STATUS_OPENING
+        self._axa._status = AXAStatus.OPENING
         self._axa._position = 0
         self._axa._timestamp = time.time() - self._axa._TIME_UNLOCK
         time.sleep(self._axa._TIME_OPEN / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_OPENING, self._axa._status)
+        self.assertIs(AXAStatus.OPENING, self._axa._status)
         self.assertAlmostEqual(25.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_OPEN / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_OPENING, self._axa._status)
+        self.assertIs(AXAStatus.OPENING, self._axa._status)
         self.assertAlmostEqual(50.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_OPEN / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_OPENING, self._axa._status)
+        self.assertIs(AXAStatus.OPENING, self._axa._status)
         self.assertAlmostEqual(75.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_OPEN / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_OPEN, self._axa._status)
+        self.assertIs(AXAStatus.OPEN, self._axa._status)
         self.assertEqual(100.0, self._axa._position)
 
     def testUpdateClosing(self):
-        self._axa._status = AXARemote.STATUS_CLOSING
+        self._axa._status = AXAStatus.CLOSING
         self._axa._position = 100
         self._axa._timestamp = time.time()
         time.sleep(self._axa._TIME_CLOSE / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_CLOSING, self._axa._status)
+        self.assertIs(AXAStatus.CLOSING, self._axa._status)
         self.assertAlmostEqual(75.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_CLOSE / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_CLOSING, self._axa._status)
+        self.assertIs(AXAStatus.CLOSING, self._axa._status)
         self.assertAlmostEqual(50.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_CLOSE / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_CLOSING, self._axa._status)
+        self.assertIs(AXAStatus.CLOSING, self._axa._status)
         self.assertAlmostEqual(25.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_CLOSE / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_LOCKING, self._axa._status)
+        self.assertIs(AXAStatus.LOCKING, self._axa._status)
         self.assertAlmostEqual(100.0, self._axa._position, delta=1)
 
     def testUpdateLocking(self):
-        self._axa._status = AXARemote.STATUS_LOCKING
+        self._axa._status = AXAStatus.LOCKING
         self._axa._position = 100
         self._axa._timestamp = time.time() - self._axa._TIME_CLOSE
         time.sleep(self._axa._TIME_LOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_LOCKING, self._axa._status)
+        self.assertIs(AXAStatus.LOCKING, self._axa._status)
         self.assertAlmostEqual(75.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_LOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_LOCKING, self._axa._status)
+        self.assertIs(AXAStatus.LOCKING, self._axa._status)
         self.assertAlmostEqual(50.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_LOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_LOCKING, self._axa._status)
+        self.assertIs(AXAStatus.LOCKING, self._axa._status)
         self.assertAlmostEqual(25.0, self._axa._position, delta=1)
         time.sleep(self._axa._TIME_LOCK / 4)
         self._axa._update()
-        self.assertIs(AXARemote.STATUS_LOCKED, self._axa._status)
+        self.assertIs(AXAStatus.LOCKED, self._axa._status)
         self.assertEqual(0.0, self._axa._position)
 
 
