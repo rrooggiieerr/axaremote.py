@@ -135,10 +135,10 @@ class AXARemote(ABC):
 
     def restore_position(self, position: float) -> None:
         """
-        Restores the position of the window opener, mainly introduced to restore
-        the window opener state in Home Assistant.
+        Restores the position of the window opener, mainly introduced to restore the window opener
+        state in Home Assistant.
 
-        Not to be used to move the window opener to a position
+        Not to be used to move the window opener to a position.
         """
         assert 0.0 <= position <= 100.0
 
@@ -234,9 +234,8 @@ class AXARemote(ABC):
 
     def _send_command(self, command: str) -> str | None:
         """
-        Send a command to the AXA Remote
+        Send a command to the AXA Remote.
         """
-
         if not self._connect():
             logger.error("Device is offline")
             self.connected = False
@@ -319,8 +318,8 @@ class AXARemote(ABC):
 
     def _update(self) -> None:
         """
-        Calculates the position of the window opener based on the direction
-        the window opener is moving.
+        Calculates the position of the window opener based on the direction the window opener is
+        moving.
         """
         if self._status in [
             self.STATUS_LOCKED,
@@ -406,6 +405,9 @@ class AXARemote(ABC):
         return False
 
     def open(self) -> bool:
+        """
+        Opens the window opener.
+        """
         self._target_position = 100.0
         return self._open()
 
@@ -430,6 +432,9 @@ class AXARemote(ABC):
         return False
 
     def stop(self) -> bool:
+        """
+        Stops the window opening.
+        """
         self._target_position = self._position
         return self._stop()
 
@@ -455,6 +460,9 @@ class AXARemote(ABC):
         return False
 
     def close(self) -> bool:
+        """
+        Closes the window opener.
+        """
         self._target_position = 0.0
         return self._close()
 
@@ -462,8 +470,8 @@ class AXARemote(ABC):
         """
         Initiates the window opener to move to a given position.
 
-        sync_status() needs to be called regularly to calculate the current
-        position and stop the move once the given position is reaced.
+        sync_status() needs to be called regularly to calculate the current position and stop the
+        move once the given position is reaced.
         """
         assert 0.0 <= target_position <= 100.0
 
@@ -482,7 +490,7 @@ class AXARemote(ABC):
 
     def raw_status(self) -> int:
         """
-        Returns the status as given by the AXA Remote
+        Returns the status as given by the AXA Remote.
         """
         response = self._send_command("STATUS")
         response = self._split_response(response)
@@ -590,8 +598,8 @@ class AXARemote(ABC):
 
     def position(self) -> float:
         """
-        Returns the current position of the window opener where 0.0 is totally
-        closed and 100.0 is fully open.
+        Returns the current position of the window opener where 0.0 is totally closed and 100.0 is
+        fully open.
         """
         return self._position
 
