@@ -137,7 +137,6 @@ class AXARemote(ABC):
     _TIME_CLOSE = _TIME_OPEN
     _TIME_LOCK = 16
 
-    _init: bool = True
     _raw_status: AXARawStatus = AXARawStatus.STRONG_LOCKED
     _status: AXAStatus = None
     _position: float = 0.0  # 0.0 is closed, 100.0 is fully open
@@ -154,6 +153,11 @@ class AXARemote(ABC):
         assert connection is not None
 
         self.connection = connection
+
+    def _is_initialised(self) -> bool:
+        if self.version is None:
+            return False
+        return True
 
     def restore_position(self, position: float) -> None:
         """
@@ -198,7 +202,7 @@ class AXARemote(ABC):
         if not self._connect():
             return False
 
-        if not self._init:
+        if self._is_initialised():
             return True
 
         try:
@@ -219,8 +223,6 @@ class AXARemote(ABC):
             if response[0] != AXARawStatus.VERSION:
                 return False
             self.version = response[1].split(maxsplit=1)[1]
-
-            self._init = False
 
             raw_status = AXARawStatus(self.raw_status()[0])
             if raw_status == AXARawStatus.STRONG_LOCKED:
@@ -281,7 +283,7 @@ class AXARemote(ABC):
             echo_received = None
             while True:
                 if empty_line_count > 5:
-                    if self._init:
+                    if not self._is_initialised():
                         logger.error(
                             "More than 5 empty responses, is your cable right?"
                         )
