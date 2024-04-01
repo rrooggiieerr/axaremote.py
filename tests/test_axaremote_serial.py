@@ -6,6 +6,7 @@ Created on 12 Nov 2022
 @author: Rogier van Staveren
 """
 
+import json
 import logging
 import time
 import unittest
@@ -17,7 +18,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s", level=logging.DEBUG
 )
 
-SERIAL_PORT = "/dev/tty.usbserial-110"
+_SETTINGS_JSON = "settings.json"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Test(unittest.TestCase):
@@ -25,13 +28,19 @@ class Test(unittest.TestCase):
     Unit Test for testing an AXA Remote window opener over a serial connection
     """
 
+    _serial_port = None
     _axa = None
 
     def setUp(self):
         """
         Set up the Unit Test.
         """
-        self._axa = AXARemoteSerial(SERIAL_PORT)
+        with open(_SETTINGS_JSON, encoding="utf8") as settings_file:
+            settings = json.load(settings_file)
+            _LOGGER.debug("Json settings: %s", settings)
+            self._serial_port = settings["serial_port"]
+
+        self._axa = AXARemoteSerial(self._serial_port)
         self._axa.connect()
         status = self._axa.status()
         if status != AXAStatus.LOCKED:

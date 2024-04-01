@@ -6,6 +6,7 @@ Created on 12 Nov 2022
 @author: Rogier van Staveren
 """
 
+import json
 import logging
 import time
 import unittest
@@ -17,8 +18,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s", level=logging.DEBUG
 )
 
-HOST = "kitchen-window.local"
-PORT = 23
+_SETTINGS_JSON = "settings.json"
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Test(unittest.TestCase):
@@ -26,13 +28,22 @@ class Test(unittest.TestCase):
     Unit Test for testing an AXA Remote window opener over a telnet connection
     """
 
+    _host = None
+    _port: int = None
+
     _axa = None
 
     def setUp(self):
         """
         Set up the Unit Test.
         """
-        self._axa = AXARemoteTelnet(HOST, PORT)
+        with open(_SETTINGS_JSON, encoding="utf8") as settings_file:
+            settings = json.load(settings_file)
+            _LOGGER.debug("Json settings: %s", settings)
+            self._host = settings["host"]
+            self._port = int(settings["port"])
+
+        self._axa = AXARemoteTelnet(self._host, self._port)
         self._axa.connect()
         status = self._axa.status()
         if status != AXAStatus.LOCKED:
