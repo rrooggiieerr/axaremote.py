@@ -10,8 +10,6 @@ import logging
 import time
 from abc import ABC
 
-import serial
-
 from axaremote.axaconnection import (
     AXAConnection,
     AXAConnectionError,
