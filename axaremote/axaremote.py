@@ -54,16 +54,14 @@ class InvallidResponseError(AXARemoteError):
         self.response = response
 
     def __str__(self):
-        return (
-            f"Invalid response for command '{self.command}'. response: {repr(self.response)}"
-        )
+        return f"Invalid response for command '{self.command}'. response: {repr(self.response)}"
 
 
 class TooBusyError(AXARemoteError):
     """
     Too busy error.
 
-    If the serial connection is to busy with processing other commands.
+    If the connection is to busy with processing other commands.
     """
 
     def __str__(self):
@@ -247,7 +245,6 @@ class AXARemote(ABC):
         start_time = time.time()
         while self.busy is True:
             if time.time() - start_time > _BUSY_TIMEOUT:
-                logger.error("Too busy for %s", command)
                 raise TooBusyError(command)
             logger.debug("Busy")
             time.sleep(0.05)
@@ -272,7 +269,7 @@ class AXARemote(ABC):
                     raise EmptyResponseError(command)
 
                 response = self.connection.readline()
-                response = response.decode(errors='ignore').strip(" \n\r")
+                response = response.decode(errors="ignore").strip(" \n\r")
                 if response == "":
                     # Sometimes we first receive an empty line
                     logger.debug("Empty line")
