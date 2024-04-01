@@ -46,15 +46,16 @@ if __name__ == "__main__":
         axa = AXARemoteTelnet(args.host, args.port)
 
     try:
-        if args.action == "status":
-            if not axa.connect():
-                _LOGGER.error("Failed to connect to AXA Remote")
-                sys.exit(1)
+        if not axa.connect():
+            _LOGGER.error("Failed to connect to AXA Remote")
+            sys.exit(1)
 
-            _LOGGER.info(axa.device)
-            _LOGGER.info(axa.version)
+        _LOGGER.info("Device   : %s", axa.device)
+        _LOGGER.info("Version  : %s", axa.version)
+
+        if args.action == "status":
             status = axa.raw_status()
-            _LOGGER.info(status[1])
+            _LOGGER.info("Status   : %s", status[1])
         elif args.action == "open":
             axa.restore_position(0.0)
             if axa.open():
