@@ -133,6 +133,7 @@ class AXASerialConnection(AXAConnection):
 
     @property
     def is_open(self):
+        """If the connection is open"""
         if self._connection and self._connection.is_open:
             return True
 
@@ -207,6 +208,7 @@ class AXATelnetConnection(AXAConnection):
 
     @property
     def is_open(self):
+        """If the connection is open"""
         if self._connection:
             return True
 
@@ -232,7 +234,7 @@ class AXATelnetConnection(AXAConnection):
     def readline(self) -> str:
         try:
             return self._connection.read_until(b"\r", _TELNET_TIMEOUT)
-        except EOFError as ex:
+        except (ConnectionResetError, EOFError) as ex:
             logger.error("Connection lost: %s", ex)
             self.close()
             raise AXAConnectionError(str(ex)) from ex
