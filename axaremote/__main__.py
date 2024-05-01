@@ -27,7 +27,17 @@ if __name__ == "__main__":
     telnet_parser.add_argument("host")
     telnet_parser.add_argument("port", type=int)
 
-    argparser.add_argument("action", choices=["status", "open", "close", "stop"])
+    argparser.add_argument(
+        "action", choices=["status", "open", "close", "stop", "calibrate"]
+    )
+    argparser.add_argument(
+        "--close-time",
+        nargs="?",
+        const=1,
+        type=float,
+        dest="close_time",
+        required=False,
+    )
     argparser.add_argument("--wait", dest="wait", action="store_true")
     argparser.add_argument("--debug", dest="debugLogging", action="store_true")
 
@@ -44,6 +54,9 @@ if __name__ == "__main__":
         axa = AXARemoteSerial(args.serial_port)
     elif "host" in args:
         axa = AXARemoteTelnet(args.host, args.port)
+
+    if "close_time" in args:
+        axa.set_close_time(args.close_time)
 
     try:
         if not axa.connect():
@@ -91,6 +104,9 @@ if __name__ == "__main__":
         elif args.action == "stop":
             if axa.stop():
                 _LOGGER.info("AXA Remote stopped")
+        elif args.action == "calibrate":
+            _LOGGER.info("Calibrating AXA Remote")
+            axa.calibrate()
     except AXARemoteError as e:
         _LOGGER.error(
             "Error communicating with AXA Remote on %s, reason: %s", axa.connection, e
